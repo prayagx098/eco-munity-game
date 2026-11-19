@@ -449,6 +449,7 @@ export interface GameState {
   start: (profile: Profile) => void
   reset: () => void
   togglePause: () => void
+  addTestPoints: (amount?: number) => void
   updateSettings: (s: Partial<Settings>) => void
   tick: (dt: number) => void
   applyOutfit: () => void
@@ -758,6 +759,14 @@ export const useGame = create<GameState>()((set, get) => {
         title: `Welcome, ${profile.name}!`,
         text: others ? `${others} other player${others > 1 ? 's are' : ' is'} in town. Walk up to them to chat!` : 'Walk with WASD / arrow keys. Press E to pick up litter.',
       })
+
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search)
+        if (params.has('hack') || params.has('points')) {
+          const custom = Number(params.get('hack') || params.get('points')) || 2000
+          setTimeout(() => get().addTestPoints(custom), 600)
+        }
+      }
     },
 
     reset: () => {
@@ -768,6 +777,47 @@ export const useGame = create<GameState>()((set, get) => {
     },
 
     togglePause: () => set((s) => ({ paused: !s.paused })),
+
+    addTestPoints: (amount = 2000) => {
+      const s = get()
+      const newPoints = s.points + amount
+      const newCoins = s.wallet.coins + Math.max(500, Math.round(amount / 4))
+      const newEnergy = 100
+      const newHappiness = 100
+
+      // Also boost town stats so Dynamic Town Evolution turns on (Greening & Paradise tiers, solar panels, blooming flowers)
+      const newStats = {
+        ...s.stats,
+        sorted: s.stats.sorted + 20,
+        trees: s.stats.trees + 10,
+        watered: s.stats.watered + 10,
+        lightsOff: s.stats.lightsOff + 8,
+        tapsFixed: s.stats.tapsFixed + 6,
+        pondCleaned: s.stats.pondCleaned + 5,
+      }
+
+      const wallet = { ...s.wallet, coins: newCoins }
+      saveWallet(wallet)
+
+      set({
+        points: newPoints,
+        energy: newEnergy,
+        happiness: newHappiness,
+        stats: newStats,
+        wallet,
+      })
+
+      get().addFloater({ x: player.x, z: player.z, text: `+${amount} ⭐ DEV HACK`, color: '#f59e0b' }, true)
+      get().pushToast({
+        kind: 'badge',
+        emoji: '⚡',
+        title: `+${amount} Points Dev Hack Applied!`,
+        text: `Total: ${newPoints} pts · Paradise Tier Unlocked · +${Math.max(500, Math.round(amount / 4))} Coins`,
+      })
+      sfx('fanfare')
+      get().checkBadges()
+      bridge.worldDirty()
+    },
 
     /* ------------------------------- shop ------------------------------- */
     wallet: loadWallet(),
@@ -1819,3 +1869,10 @@ useGame.subscribe((s) => {
 })
 
 initEarning(useGame as unknown as Parameters<typeof initEarning>[0])
+
+if (typeof window !== 'undefined') {
+  ;(window as unknown as { __ecoHack?: { addPoints: (n?: number) => void; reset: () => void } }).__ecoHack = {
+    addPoints: (n = 2000) => useGame.getState().addTestPoints(n),
+    reset: () => useGame.getState().reset(),
+  }
+}

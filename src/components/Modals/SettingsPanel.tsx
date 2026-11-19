@@ -193,6 +193,21 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
                       </div>
                     )}
                   </Section>
+                  <Section title="🛠️ Testing Hacks">
+                    <button
+                      onClick={() => {
+                        useGame.getState().addTestPoints(2000)
+                        onClose()
+                      }}
+                      className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 py-2.5 px-3 text-xs sm:text-sm font-bold text-white shadow-md hover:from-amber-600 hover:to-orange-600 transition active:scale-98"
+                    >
+                      <span className="text-base">⚡</span>
+                      <span>+2,000 Points & Paradise Town</span>
+                    </button>
+                    <p className="mt-1 text-[10px] text-slate-500 font-medium text-center">
+                      Adds 2,000 pts, +500 coins, max stats & triggers Paradise Tier. Shortcut: press <kbd className="bg-slate-200 px-1 py-0.5 rounded font-bold text-slate-800">H</kbd>
+                    </p>
+                  </Section>
                   <button
                     onClick={() => {
                       reset()

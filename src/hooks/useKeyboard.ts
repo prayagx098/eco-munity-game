@@ -89,6 +89,9 @@ export function useKeyboard() {
         case 'KeyF':
           toggleFullscreen()
           break
+        case 'KeyH':
+          s.addTestPoints(2000)
+          break
         case 'Equal':
         case 'NumpadAdd':
           view.zoom = Math.min(view.maxZoom, view.zoom * 1.15)
