@@ -35,6 +35,8 @@ let ws: WebSocket | null = null
 let wsConnected = false
 let worldTimer: ReturnType<typeof setTimeout> | null = null
 
+export const DEFAULT_RELAY_URL = 'wss://eco-munity-game.onrender.com'
+
 export function getWsUrl(): string | null {
   if (typeof window === 'undefined') return null
   const params = new URLSearchParams(window.location.search)
@@ -44,18 +46,10 @@ export function getWsUrl(): string | null {
   const envWs = (import.meta as any).env?.VITE_WS_URL
   if (envWs) return envWs
 
-  // Auto-connect if deployed to a full-stack container host (Render, Railway, Fly, etc.)
+  // When hosted on production (Netlify, Render, Vercel, etc.), auto-connect to our live persistent Render relay
   const host = window.location.host
-  if (
-    host &&
-    !host.includes('localhost') &&
-    !host.includes('127.0.0.1') &&
-    !host.includes('github.io') &&
-    !host.includes('vercel.app') &&
-    !host.includes('netlify.app')
-  ) {
-    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    return `${proto}//${host}`
+  if (host && !host.includes('localhost') && !host.includes('127.0.0.1')) {
+    return DEFAULT_RELAY_URL
   }
 
   return null
