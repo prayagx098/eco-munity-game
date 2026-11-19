@@ -44,6 +44,20 @@ export function getWsUrl(): string | null {
   const envWs = (import.meta as any).env?.VITE_WS_URL
   if (envWs) return envWs
 
+  // Auto-connect if deployed to a full-stack container host (Render, Railway, Fly, etc.)
+  const host = window.location.host
+  if (
+    host &&
+    !host.includes('localhost') &&
+    !host.includes('127.0.0.1') &&
+    !host.includes('github.io') &&
+    !host.includes('vercel.app') &&
+    !host.includes('netlify.app')
+  ) {
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${proto}//${host}`
+  }
+
   return null
 }
 
