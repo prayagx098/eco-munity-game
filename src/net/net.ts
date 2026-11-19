@@ -131,7 +131,8 @@ function announce(t: 'hello' | 'hb') {
 }
 
 function sendWorld() {
-  if (!bridge.isHost || !playing() || peers.size === 0) return
+  if (!bridge.isHost || !playing()) return
+  if (peers.size === 0 && !wsConnected) return
   post({ t: 'world', s: useGame.getState().snapshot() })
 }
 
@@ -216,15 +217,26 @@ function handle(m: Record<string, unknown>) {
       return
     }
     case 'world': {
-      if (bridge.isHost && synced) return
-      if (from !== bridge.hostId && synced) return
+      if (from !== 'server') {
+        if (bridge.isHost && synced) return
+        if (from !== bridge.hostId && synced) return
+      }
       const w = m.s as WorldSnapshot
-      s.applySnapshot(w)
-      for (const [id, x, z] of w.npcs) hostNpcs.set(id, { x, z })
+      if (w) {
+        s.applySnapshot(w)
+        if (w.npcs) {
+          for (const [id, x, z] of w.npcs) hostNpcs.set(id, { x, z })
+        }
+      }
       if (!synced) {
         synced = true
         announce('hb')
       }
+      return
+    }
+    case 'reset': {
+      s.reset()
+      s.pushToast({ kind: 'info', emoji: '🔄', title: 'World Reset', text: 'The room state was reset by the server.' })
       return
     }
     case 'act': {

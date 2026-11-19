@@ -288,6 +288,7 @@ export interface WorldSnapshot {
   roundComplete: boolean
   npcs: [string, number, number][]
   settings: Settings
+  stats?: Stats
 }
 
 /* ------------------------------------------------------------------ */
@@ -703,6 +704,16 @@ export function findInteraction(s: GameState, px: number, pz: number): Interacti
 /* Store                                                                */
 /* ------------------------------------------------------------------ */
 
+const loadSavedProfile = (): Profile => {
+  try {
+    if (typeof window !== 'undefined') {
+      const raw = localStorage.getItem('eco-munity-profile')
+      if (raw) return JSON.parse(raw)
+    }
+  } catch {}
+  return { name: 'Eco Hero', shirt: '#3b82f6', hair: '#7c3f12', pants: '#1e3a8a' }
+}
+
 export const useGame = create<GameState>()((set, get) => {
   const me = (): Actor => ({ id: bridge.myId, name: get().profile.name, x: player.x, z: player.z })
 
@@ -712,12 +723,17 @@ export const useGame = create<GameState>()((set, get) => {
     myId: bridge.myId,
     isHost: true,
     remotes: {},
-    profile: { name: 'Eco Hero', shirt: '#3b82f6', hair: '#7c3f12', pants: '#1e3a8a' },
+    profile: loadSavedProfile(),
     settings: { showTips: true, dayNight: true, weather: true },
 
     /* ---------------------------- lifecycle ---------------------------- */
 
     start: (profile) => {
+      try {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('eco-munity-profile', JSON.stringify(profile))
+        }
+      } catch {}
       // the colours chosen on the welcome screen are your base look; shop items go on top of them
       const wallet = { ...get().wallet, base: { shirt: profile.shirt, pants: profile.pants, hair: profile.hair } }
       saveWallet(wallet)
@@ -1577,15 +1593,20 @@ export const useGame = create<GameState>()((set, get) => {
         roundComplete: s.roundComplete,
         npcs,
         settings: s.settings,
+        stats: s.stats,
       }
     },
 
     applySnapshot: (w) => {
       const s = get()
-      const { npcs, ...rest } = w
+      const { npcs, stats, ...rest } = w
       // keep my explore progress (it's personal)
       const tasks = rest.tasks.map((t) => (t.kind === 'explore' ? { ...t, progress: Math.max(t.progress, Math.min(t.target, s.visitedZones.length)) } : t))
-      set({ ...rest, tasks })
+      set({
+        ...rest,
+        tasks,
+        ...(stats ? { stats } : {}),
+      })
       void npcs
     },
 
