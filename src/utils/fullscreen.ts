@@ -81,3 +81,4 @@ export function setupAutoFullscreen() {
   window.addEventListener('keydown', onFirstInteraction, { passive: true })
   window.addEventListener('touchstart', onFirstInteraction, { passive: true })
 }
+
