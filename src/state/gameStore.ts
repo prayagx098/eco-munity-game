@@ -400,6 +400,7 @@ export interface GameState {
   myId: string
   isHost: boolean
   remotes: Record<string, Profile>
+  netStatus: 'offline' | 'waking' | 'connected'
 
   /* shared world */
   energy: number
@@ -724,6 +725,7 @@ export const useGame = create<GameState>()((set, get) => {
     myId: bridge.myId,
     isHost: true,
     remotes: {},
+    netStatus: 'offline',
     profile: loadSavedProfile(),
     settings: { showTips: true, dayNight: true, weather: true },
 

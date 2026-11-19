@@ -12,6 +12,7 @@ export function StatusPill() {
   const storm = useGame((s) => s.weather.storm)
   const windy = useGame((s) => s.weather.wind > 0.55)
   const online = useGame((s) => Object.keys(s.remotes).length + 1)
+  const netStatus = useGame((s) => s.netStatus)
   const stats = useGame((s) => s.stats)
   const townEco = getTownEcoStatus(stats)
   const companion = useGame((s) => s.companion)
@@ -25,10 +26,29 @@ export function StatusPill() {
         <span className="tabular-nums">{clockLabel(clock)}</span>
         {windy && <span className="hidden sm:inline text-white/60">· windy</span>}
       </div>
-      <div className="flex items-center gap-1.5 px-2 sm:px-3" title="Players online">
-        <span className={`h-1.5 w-1.5 rounded-full ${online > 1 ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-white/40'}`} />
-        <span className="tabular-nums">{online}</span>
-        <span className="hidden sm:inline">online</span>
+      <div
+        className="flex items-center gap-1.5 px-2 sm:px-3"
+        title={
+          netStatus === 'connected'
+            ? 'Connected to live cloud relay'
+            : netStatus === 'waking'
+            ? 'Waking up live cloud server (~30s cold start)...'
+            : 'Multiplayer: Local tab mode'
+        }
+      >
+        <span
+          className={`h-2 w-2 rounded-full transition-all ${
+            netStatus === 'connected'
+              ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]'
+              : netStatus === 'waking'
+              ? 'bg-amber-400 animate-pulse shadow-[0_0_8px_#f59e0b]'
+              : 'bg-white/40'
+          }`}
+        />
+        <span className="tabular-nums font-bold">{online}</span>
+        <span className="hidden sm:inline">
+          {netStatus === 'waking' ? 'waking...' : 'online'}
+        </span>
       </div>
       <div className="flex items-center gap-1.5 px-2 sm:px-2.5" title={`Town Evolution: ${townEco.label}`}>
         <span className="text-xs leading-none">{townEco.tier === 3 ? '🌟' : townEco.tier === 2 ? '🌿' : '🌱'}</span>

@@ -63,6 +63,25 @@ function resolveWsUrl(raw: string): string {
   return `${proto}//${raw}`
 }
 
+let wakingToastShown = false
+let keepAliveTimer: ReturnType<typeof setInterval> | null = null
+
+function probeHttpWakeup(rawUrl: string) {
+  try {
+    const fullUrl = resolveWsUrl(rawUrl)
+    const httpUrl = fullUrl.replace('wss://', 'https://').replace('ws://', 'http://').split('?')[0] + '/api/health'
+    fetch(httpUrl, { mode: 'no-cors' }).catch(() => {})
+  } catch {}
+}
+
+function startKeepAlive(rawUrl: string) {
+  if (keepAliveTimer) return
+  // Ping Render every 4 minutes while connected so it never goes to sleep during gameplay
+  keepAliveTimer = setInterval(() => {
+    probeHttpWakeup(rawUrl)
+  }, 4 * 60 * 1000)
+}
+
 function initWebSocket(rawUrl: string) {
   try {
     const fullUrl = resolveWsUrl(rawUrl)
@@ -73,15 +92,45 @@ function initWebSocket(rawUrl: string) {
       urlObj.searchParams.set('room', room)
     }
 
+    // 1. Immediately fire HTTP probe to wake up sleeping Render container
+    probeHttpWakeup(rawUrl)
+    startKeepAlive(rawUrl)
+
     const wsUrl = urlObj.toString()
     console.log(`[Eco-munity] Connecting to multiplayer relay: ${wsUrl}`)
+    useGame.setState({ netStatus: 'waking' })
+
+    // If server takes longer than 6s to wake up (Render cold start), notify player
+    const wakeTimer = setTimeout(() => {
+      if (!wsConnected && !wakingToastShown && playing()) {
+        wakingToastShown = true
+        useGame.getState().pushToast({
+          kind: 'info',
+          emoji: '⏳',
+          title: 'Waking Up Live Server...',
+          text: 'Render cloud server spins up from sleep in ~30s. Synchronizing shortly!',
+        })
+      }
+    }, 6000)
+
     ws = new WebSocket(wsUrl)
 
     ws.onopen = () => {
+      clearTimeout(wakeTimer)
       console.log('✅ [Eco-munity] Connected to multiplayer relay server!')
       wsConnected = true
+      useGame.setState({ netStatus: 'connected' })
       announce('hello')
       announce('hb')
+
+      if (playing()) {
+        useGame.getState().pushToast({
+          kind: 'team',
+          emoji: '🟢',
+          title: 'Live Server Connected!',
+          text: 'Multiplayer and cloud room data saving are now active.',
+        })
+      }
     }
 
     ws.onmessage = (ev) => {
@@ -95,14 +144,16 @@ function initWebSocket(rawUrl: string) {
 
     ws.onclose = () => {
       wsConnected = false
+      useGame.setState({ netStatus: 'waking' })
       setTimeout(() => {
         if (getWsUrl()) initWebSocket(rawUrl)
-      }, 3000)
+      }, 3500)
     }
 
     ws.onerror = (err) => {
       console.warn('[Eco-munity] Multiplayer relay error:', err)
       wsConnected = false
+      useGame.setState({ netStatus: 'waking' })
     }
   } catch (err) {
     console.error('Invalid WebSocket URL:', err)
