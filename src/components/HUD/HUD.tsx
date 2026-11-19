@@ -47,10 +47,7 @@ export function HUD() {
         <div className="pointer-events-auto">
           <MiniMap />
         </div>
-        <div className="relative">
-          <Dock onSettings={() => setSettingsOpen((o) => !o)} settingsOpen={settingsOpen} />
-          <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-        </div>
+        <Dock onSettings={() => setSettingsOpen((o) => !o)} settingsOpen={settingsOpen} />
       </div>
 
       {/* Bottom-right: chat (elevated on touch to avoid joystick overlap) */}
@@ -74,6 +71,7 @@ export function HUD() {
       <QuizModal />
       <QuizBowlModal />
       <HelpPopup />
+      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
       {paused && (
         <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-slate-950/40">
