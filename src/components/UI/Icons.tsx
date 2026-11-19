@@ -17,6 +17,8 @@ const PATHS: Record<string, string[]> = {
   play: ['M6 3l14 9-14 9V3z'],
   bag: ['M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z', 'M3 6h18', 'M16 10a4 4 0 0 1-8 0'],
   coin: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z', 'M12 7v10', 'M9.5 9.5C9.5 8.4 10.6 8 12 8s2.5.5 2.5 1.6c0 2.4-5 1.4-5 3.8 0 1.1 1.1 1.6 2.5 1.6s2.5-.5 2.5-1.6'],
+  fullscreen: ['M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3'],
+  minimize: ['M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3'],
 }
 
 export type IconName = keyof typeof PATHS

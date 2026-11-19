@@ -13,8 +13,10 @@ import { useAudio } from './hooks/useAudio'
 import { useGame } from './state/gameStore'
 import { PRESETS, useSettings } from './state/settings'
 import { startNet } from './net/net'
+import { setupAutoFullscreen } from './utils/fullscreen'
 
 startNet()
+setupAutoFullscreen()
 
 export default function App() {
   useGameLoop()

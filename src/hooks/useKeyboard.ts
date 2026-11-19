@@ -3,6 +3,7 @@ import { useGame } from '../state/gameStore'
 import { keys, view } from '../state/sceneRegistry'
 import { useView } from '../state/viewMode'
 import { useUI } from '../state/ui'
+import { toggleFullscreen } from '../utils/fullscreen'
 
 const MOVE_KEYS: Record<string, string> = {
   KeyW: 'up',
@@ -84,6 +85,9 @@ export function useKeyboard() {
           break
         case 'KeyB':
           s.toggleBadges()
+          break
+        case 'KeyF':
+          toggleFullscreen()
           break
         case 'Equal':
         case 'NumpadAdd':

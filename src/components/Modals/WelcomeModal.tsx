@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useGame } from '../../state/gameStore'
 import { HAIR_COLORS, PANTS_COLORS, SHIRT_COLORS } from '../../state/gameData'
 import { Icon } from '../UI/Icons'
+import { requestFullscreenSafe } from '../../utils/fullscreen'
 
 function Swatches({ colors, value, onPick, label }: { colors: string[]; value: string; onPick: (c: string) => void; label: string }) {
   return (
@@ -70,7 +71,10 @@ export function WelcomeModal() {
   const [hair, setHair] = useState(saved.hair)
   const [pants, setPants] = useState(saved.pants)
 
-  const go = () => start({ name: name.trim().slice(0, 14) || 'Eco Hero', shirt, hair, pants })
+  const go = () => {
+    requestFullscreenSafe()
+    start({ name: name.trim().slice(0, 14) || 'Eco Hero', shirt, hair, pants })
+  }
 
   return (
     <AnimatePresence>

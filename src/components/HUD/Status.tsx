@@ -1,7 +1,9 @@
+import { useState, useEffect } from 'react'
 import { useGame, clockLabel, dayPhase, isNight, getTownEcoStatus } from '../../state/gameStore'
 import { useUI } from '../../state/ui'
 import { useView, VIEW_LABELS } from '../../state/viewMode'
 import { Icon, type IconName } from '../UI/Icons'
+import { isFullscreen, toggleFullscreen } from '../../utils/fullscreen'
 
 /** Top-centre pill: time of day + weather, and how many players are online */
 export function StatusPill() {
@@ -65,6 +67,18 @@ function DockButton({ icon, label, onClick, active, badge }: { icon: IconName; l
 
 /** A small icon dock under the map */
 export function Dock({ onSettings, settingsOpen }: { onSettings: () => void; settingsOpen: boolean }) {
+  const [full, setFull] = useState(false)
+
+  useEffect(() => {
+    const onFsChange = () => setFull(isFullscreen())
+    document.addEventListener('fullscreenchange', onFsChange)
+    document.addEventListener('webkitfullscreenchange', onFsChange)
+    return () => {
+      document.removeEventListener('fullscreenchange', onFsChange)
+      document.removeEventListener('webkitfullscreenchange', onFsChange)
+    }
+  }, [])
+
   const tasks = useGame((s) => s.tasks)
   const badges = useGame((s) => s.badges.length)
   const toggleBadges = useGame((s) => s.toggleBadges)
@@ -79,11 +93,12 @@ export function Dock({ onSettings, settingsOpen }: { onSettings: () => void; set
   const setInv = useGame((s) => s.setInv)
   const done = tasks.filter((t) => t.progress >= t.target).length
   return (
-    <div className="glass pointer-events-auto grid grid-cols-3 gap-0.5 p-0.5 sm:p-1 sm:flex sm:items-center sm:gap-0.5 shadow-lg">
+    <div className="glass pointer-events-auto grid grid-cols-4 gap-0.5 p-0.5 sm:p-1 sm:flex sm:items-center sm:gap-0.5 shadow-lg">
       <DockButton icon="tasks" label="Tasks (T)" onClick={() => setTasks()} active={tasksOpen} badge={`${done}/${tasks.length}`} />
       <DockButton icon="bag" label="Backpack (I)" onClick={() => setInv()} active={invOpen} badge={coins} />
       <DockButton icon="award" label="Badges (B)" onClick={() => toggleBadges(true)} badge={badges || undefined} />
       <DockButton icon="camera" label={`Camera: ${VIEW_LABELS[mode].name} (V)`} onClick={cycle} />
+      <DockButton icon={full ? 'minimize' : 'fullscreen'} label={full ? 'Exit Fullscreen (F)' : 'Fullscreen (F)'} onClick={() => toggleFullscreen()} active={full} />
       <DockButton icon="help" label="How to play" onClick={() => setHelp()} active={helpOpen} />
       <DockButton icon="settings" label="Settings" onClick={onSettings} active={settingsOpen} />
     </div>
