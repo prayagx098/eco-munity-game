@@ -1,5 +1,5 @@
 /**
- * Fullscreen utility for auto-fullscreen on launch and manual toggling.
+ * Fullscreen and orientation utilities for auto-fullscreen and landscape orientation.
  */
 
 export function isFullscreen(): boolean {
@@ -63,15 +63,34 @@ export async function toggleFullscreen(): Promise<boolean> {
   }
 }
 
+export async function lockLandscapeSafe(): Promise<boolean> {
+  try {
+    if (typeof screen !== 'undefined' && screen.orientation && 'lock' in screen.orientation) {
+      await (screen.orientation as any).lock('landscape')
+      return true
+    }
+  } catch {
+    // Mobile browsers may ignore if not in fullscreen or unsupported (e.g. iOS Safari)
+  }
+  return false
+}
+
+export async function enterGameFullscreen(): Promise<boolean> {
+  const success = await requestFullscreenSafe()
+  await lockLandscapeSafe()
+  return success
+}
+
 /**
- * Triggers fullscreen automatically on the first user interaction (click, tap, keypress).
+ * Triggers fullscreen & landscape automatically on the first user interaction (click, tap, keypress).
  * Web browsers require a user gesture before entering fullscreen mode.
  */
 export function setupAutoFullscreen() {
   if (typeof window === 'undefined') return
 
-  const onFirstInteraction = () => {
-    requestFullscreenSafe()
+  const onFirstInteraction = async () => {
+    await requestFullscreenSafe()
+    await lockLandscapeSafe()
     window.removeEventListener('pointerdown', onFirstInteraction)
     window.removeEventListener('keydown', onFirstInteraction)
     window.removeEventListener('touchstart', onFirstInteraction)
@@ -81,4 +100,3 @@ export function setupAutoFullscreen() {
   window.addEventListener('keydown', onFirstInteraction, { passive: true })
   window.addEventListener('touchstart', onFirstInteraction, { passive: true })
 }
-

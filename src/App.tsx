@@ -7,6 +7,7 @@ import { BigMap } from './components/HUD/MiniMap'
 import { WelcomeModal } from './components/Modals/WelcomeModal'
 import { RoundCompleteModal } from './components/Modals/RoundCompleteModal'
 import { BadgesPanel } from './components/Modals/BadgesPanel'
+import { OrientationGate } from './components/HUD/OrientationGate'
 import { useGameLoop } from './hooks/useGameLoop'
 import { useKeyboard } from './hooks/useKeyboard'
 import { useAudio } from './hooks/useAudio'
@@ -62,6 +63,7 @@ export default function App() {
           <BadgesPanel />
           <RoundCompleteModal />
           <WelcomeModal />
+          <OrientationGate />
         </div>
       </div>
     </MotionConfig>
