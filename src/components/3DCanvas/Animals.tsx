@@ -1,10 +1,12 @@
-import { createContext, useContext, useEffect, useId, useRef, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { useFrame } from '@react-three/fiber'
 import type { Group, Mesh } from 'three'
 import { getTownEcoStatus, useGame } from '../../state/gameStore'
-import { bodies, companionPos, player } from '../../state/sceneRegistry'
+import { bodies, companionPos, duckFeeds, fetchStick, player } from '../../state/sceneRegistry'
 import { POND, RIVER, groundY } from '../../state/world'
 import { Block, Label, Plastic } from './primitives'
+import { sfx } from '../../audio/audio'
+import { haptic } from '../../utils/haptics'
 
 /** animals beyond ~70 units (squared) from the player are hidden and not animated */
 const FAR2 = 70 * 70

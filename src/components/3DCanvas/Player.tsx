@@ -10,7 +10,7 @@ import { footstepsOn, sfx } from '../../audio/audio'
 import { emitPuff } from './Weather'
 import { useStory } from '../../state/story'
 import { useMeta } from '../../state/meta'
-import { VEHICLES, airborne, collides, groundY, zoneAt } from '../../state/world'
+import { SCHOOL_FIELD, VEHICLES, airborne, collides, groundY, zoneAt } from '../../state/world'
 import { Minifig, SpeechBubble, type MinifigAnim } from './NPCs'
 import { TrashShape } from './TrashItems'
 import { VehicleMesh } from './Vehicles'
@@ -52,6 +52,8 @@ export function Player() {
   const veh = useRef<Group>(null)
   const vehicle = useRef(player.vehicle)
   const [, setV] = useState(0)
+  const [bandana, setBandana] = useState<'red' | 'blue' | null>(null)
+  const lastBellPress = useRef(0)
   const profile = useGame((s) => s.profile)
   const carrying = useGame((s) => s.carrying)
 
@@ -244,6 +246,14 @@ export function Player() {
     }
     if (veh.current) veh.current.visible = !!player.vehicle
 
+    // --- Riding Bell / Horn ---
+    if (keys.has('jump') && canMove && player.vehicle) {
+      if (Date.now() - lastBellPress.current > 550) {
+        lastBellPress.current = Date.now()
+        useGame.getState().ringBikeBell()
+      }
+    }
+
     // --- Jumping & Hopping Physics ---
     const wantsJump = keys.has('jump') && canMove && !player.vehicle
     if (wantsJump && isGrounded.current) {
@@ -274,8 +284,13 @@ export function Player() {
 
     airborne.h = player.vehicle ? 0 : jumpY.current
     const gy = groundY(player.x, player.z)
-    const seat = player.vehicle === 'bike' ? 0.34 : 0
+    const seat = player.vehicle === 'bike' ? 0.34 : player.vehicle === 'scooter' ? 0.08 : player.vehicle === 'board' ? 0.05 : 0
     const roadBump = 0
+
+    // Automatic team bandanas on the soccer field
+    const onPitch = player.x >= SCHOOL_FIELD.x0 && player.x <= SCHOOL_FIELD.x1 && player.z >= SCHOOL_FIELD.z0 && player.z <= SCHOOL_FIELD.z1
+    const curBandana = onPitch ? (player.z < -3.2 ? 'red' : 'blue') : null
+    if (curBandana !== bandana) setBandana(curBandana)
 
     g.position.set(player.x, gy + 0.06 + jumpY.current + (player.vehicle ? roadBump : 0), player.z)
     g.rotation.y = player.heading
@@ -373,7 +388,7 @@ export function Player() {
   return (
     <group ref={group}>
       <group>
-        <Minifig shirt={profile.shirt} pants={profile.pants} hair={profile.hair} anim={anim} shirt2={profile.shirt2} shirtId={profile.shirtId} pantsId={profile.pantsId} pattern={profile.pattern} shoes={profile.shoes} hat={profile.hat} glasses={profile.glasses} back={profile.back} />
+        <Minifig shirt={profile.shirt} pants={profile.pants} hair={profile.hair} anim={anim} shirt2={profile.shirt2} shirtId={profile.shirtId} pantsId={profile.pantsId} pattern={profile.pattern} shoes={profile.shoes} hat={profile.hat} glasses={profile.glasses} back={profile.back} bandana={bandana} />
       </group>
       <group ref={veh} visible={false}>
         {player.vehicle && <VehicleMesh kind={player.vehicle} spin />}

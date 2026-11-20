@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { keys, player, touchInput } from '../../state/sceneRegistry'
+import { useGame } from '../../state/gameStore'
 
 /**
  * Mobile Touch Controls:
@@ -186,6 +187,18 @@ function RideButtons() {
         <HoldKey k="right" label="▶" aria="Steer right" className="h-20 w-20 bg-slate-900/55 sm:h-24 sm:w-24" />
       </div>
       <div className="pointer-events-none fixed bottom-5 right-5 z-30 flex items-end gap-3 sm:bottom-6 sm:right-6">
+        <button
+          onPointerDown={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            useGame.getState().ringBikeBell()
+          }}
+          className="pointer-events-auto mb-1 flex h-14 w-14 select-none touch-none items-center justify-center rounded-2xl border-2 border-white/60 bg-sky-500/80 text-2xl shadow-xl active:scale-95 backdrop-blur-md"
+          title="Ring Bell"
+          aria-label="Ring Bell"
+        >
+          🔔
+        </button>
         <HoldKey k="run" label="⚡" aria="Boost" className="mb-1 h-14 w-14 bg-amber-500/70 text-2xl" />
         <div className="flex flex-col gap-3">
           <HoldKey k="up" label="▲" aria="Accelerate" className="h-20 w-20 bg-emerald-600/70 sm:h-24 sm:w-24" />
