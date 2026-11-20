@@ -7,10 +7,12 @@ import { Icon } from '../UI/Icons'
 /** A simple preview of how your hero looks right now */
 function Preview() {
   const p = useGame((s) => s.profile)
+  const wallet = useGame((s) => s.wallet)
   const shoe = p.shoes ? ITEM_BY_ID[p.shoes] : undefined
   const hat = p.hat ? ITEM_BY_ID[p.hat] : undefined
   const glasses = p.glasses ? ITEM_BY_ID[p.glasses] : undefined
   const back = p.back ? ITEM_BY_ID[p.back] : undefined
+  const ride = wallet.equipped.vehicle ? ITEM_BY_ID[wallet.equipped.vehicle] : undefined
   const stripe = p.pattern && p.shirt2
   return (
     <div className="relative">
@@ -39,6 +41,7 @@ function Preview() {
       </svg>
       {hat && <div className="absolute -top-3 left-1/2 -translate-x-1/2 text-2xl sm:text-3xl">{hat.icon}</div>}
       {glasses && <div className="absolute top-[2.2rem] sm:top-[2.8rem] left-1/2 -translate-x-1/2 text-lg sm:text-xl">{glasses.icon}</div>}
+      {ride && <div className="absolute -bottom-2 -right-3 text-2xl sm:text-3xl drop-shadow">{ride.icon}</div>}
     </div>
   )
 }
