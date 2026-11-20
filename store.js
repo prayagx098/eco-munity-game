@@ -40,6 +40,9 @@ function db() {
       })
       .catch((err) => {
         clientPromise = null // try again next time
+        if (/ssl|tls|ReplicaSetNoPrimary|ServerSelection/i.test(err.message)) {
+          console.error('⚠️ [MongoDB] Cannot reach Atlas. This is almost always the Network Access list: in Atlas open Security → Network Access and allow 0.0.0.0/0 (Render has no fixed IP).')
+        }
         throw err
       })
   }
