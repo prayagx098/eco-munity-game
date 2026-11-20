@@ -607,7 +607,45 @@ function ActiveCompanion() {
     const isRiding = player.vehicle !== null
     companionPos.waiting = isRiding
 
-    if (isRiding) {
+    const isFetching = companion.kind === 'dog' && fetchStick.active
+
+    if (isFetching) {
+      if (fetchStick.state === 'flying' || fetchStick.state === 'on_ground') {
+        const tx = fetchStick.targetX
+        const tz = fetchStick.targetZ
+        const dStick = Math.hypot(tx - p.x, tz - p.z)
+        if (dStick < 0.6) {
+          fetchStick.state = 'returning'
+          sfx('bark')
+        } else {
+          const speed = 7.5
+          const step = Math.min(dStick, speed * dt)
+          p.x += ((tx - p.x) / dStick) * step
+          p.z += ((tz - p.z) / dStick) * step
+          p.heading = Math.atan2(tx - p.x, tz - p.z)
+          st.current.moving = true
+          st.current.sit = false
+        }
+      } else if (fetchStick.state === 'returning') {
+        const dPlayer = Math.hypot(player.x - p.x, player.z - p.z)
+        if (dPlayer < 1.4) {
+          fetchStick.active = false
+          fetchStick.state = 'idle'
+          sfx('bark')
+          haptic([20, 40, 20])
+          useGame.getState().reward({ happiness: 10, energy: 3, label: '🦴 Fetch! +10 💖' })
+          useGame.getState().addFloater({ x: p.x, z: p.z, text: '💖 Good dog! 🐶', color: '#f59e0b' })
+        } else {
+          const speed = 7.0
+          const step = Math.min(dPlayer - 1.2, speed * dt)
+          p.x += ((player.x - p.x) / dPlayer) * step
+          p.z += ((player.z - p.z) / dPlayer) * step
+          p.heading = Math.atan2(player.x - p.x, player.z - p.z)
+          st.current.moving = true
+          st.current.sit = false
+        }
+      }
+    } else if (isRiding) {
       // Pet stays put and waits for player
       st.current.moving = false
       st.current.sit = true
