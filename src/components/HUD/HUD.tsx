@@ -1,3 +1,4 @@
+import { HomeSync } from './HomeSync'
 import { lazy, Suspense, useState } from 'react'
 import { useGame } from '../../state/gameStore'
 import { StatsBar } from './StatsBar'
@@ -73,6 +74,7 @@ export function HUD() {
       <TouchControls />
 
       <TaskPopup />
+      <HomeSync />
       <StoryBook />
       <StoryDialog />
       <Suspense fallback={null}>

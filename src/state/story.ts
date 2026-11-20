@@ -1,3 +1,4 @@
+import { makeRoomForTrees } from './forest'
 import { create } from 'zustand'
 import { useGame, type Stats } from './gameStore'
 import { api, guestPid, useAuth } from './auth'
@@ -374,7 +375,7 @@ function prepare(ch: Chapter) {
       const extra = SAPLING_SPOTS.filter(([x, z]) => !s.saplings.some((p) => Math.hypot(p.x - x, p.z - z) < 1.5))
         .slice(0, 2 - open)
         .map(([x, z], i) => ({ id: `story-sapling-${Date.now()}-${i}`, x, z, planted: false }))
-      return { saplings: [...s.saplings, ...extra] }
+      return { saplings: makeRoomForTrees([...s.saplings, ...extra], s.elapsed, 2) }
     })
   }
   if (need('lights')) useGame.setState((s) => ({ lights: { ...s.lights, [HOUSES[1].id]: true, [HOUSES[5].id]: true } }))

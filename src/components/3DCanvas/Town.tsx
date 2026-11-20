@@ -6,6 +6,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { Group, Mesh } from 'three'
 import { Block, Label, Marker, Near, Plastic, Sign3D, sharedMaterials, type V3 } from './primitives'
+import { homeColor } from '../../state/homes'
 import { useGame, getTownEcoStatus, isNight } from '../../state/gameStore'
 import { env } from '../../state/sceneRegistry'
 import {
@@ -163,9 +164,16 @@ function House({ id, x, z, i }: { id: string; x: number; z: number; i: number })
   const stats = useGame((s) => s.stats)
   const eco = getTownEcoStatus(stats)
   const hasSolar = eco.tier >= 3 || (eco.tier === 2 && i % 2 === 0)
-  const [color, roof] = HOUSE_COLORS[i % HOUSE_COLORS.length]
+  const home = useGame((s) => s.homes[id])
+  const [color0, roof0] = HOUSE_COLORS[i % HOUSE_COLORS.length]
+  // a claimed home wears its owner's colours
+  const color = home ? homeColor(home.wall, color0) : color0
+  const roof = home ? homeColor(home.roof, roof0) : roof0
+  const doorCol = home ? homeColor(home.door, roof) : roof
+  const extras = home?.extras ?? []
   const h = 3.4 + (i % 3) * 0.9
   const two = h > 4
+  const windows: [number, number][] = two ? [[1.55, -1.2], [3.15, 1], [3.15, -1.2]] : [[1.55, -1.2]]
   const lit = !!wasted || night
   const rise = 1.25
   const ang = Math.atan2(rise, 1.95)
@@ -217,7 +225,7 @@ function House({ id, x, z, i }: { id: string; x: number; z: number; i: number })
 
       {/* front door with frame, knob, step and a little porch roof */}
       <Block position={[1.72, 0.95, 1]} size={[0.06, 1.7, 1.1]} color={TRIM} cast={false} />
-      <Block position={[1.76, 0.85, 1]} size={[0.06, 1.55, 0.86]} color={roof} roughness={0.6} />
+      <Block position={[1.76, 0.85, 1]} size={[0.06, 1.55, 0.86]} color={doorCol} roughness={0.6} />
       <Block position={[1.8, 1.25, 1]} size={[0.03, 0.3, 0.5]} color="#2b3441" cast={false} />
       <mesh position={[1.82, 0.85, 0.7]}>
         <sphereGeometry args={[0.05, 8, 6]} />
@@ -240,10 +248,23 @@ function House({ id, x, z, i }: { id: string; x: number; z: number; i: number })
         </mesh>
       </group>
 
-      {/* road-facing windows */}
-      <HouseWindow y={1.55} z={-1.2} lit={lit} wasted={!!wasted} shutter={roof} />
-      {two && <HouseWindow y={3.15} z={1} lit={lit} wasted={!!wasted} shutter={roof} />}
-      {two && <HouseWindow y={3.15} z={-1.2} lit={lit} wasted={!!wasted} shutter={roof} />}
+      {/* road-facing windows (+ flower boxes if the owner bought them) */}
+      {windows.map(([wy, wz]) => (
+        <group key={`${wy}${wz}`}>
+          <HouseWindow y={wy} z={wz} lit={lit} wasted={!!wasted} shutter={home ? doorCol : roof} />
+          {extras.includes('flowers') && (
+            <group position={[2.05, wy - 0.68, wz]}>
+              <Block position={[0, 0, 0]} size={[0.3, 0.16, 0.95]} color="#8f5527" cast={false} />
+              {[-0.36, -0.12, 0.12, 0.36].map((fz, k) => (
+                <mesh key={fz} position={[0, 0.16, fz]}>
+                  <sphereGeometry args={[0.1, 8, 6]} />
+                  <meshStandardMaterial color={['#f472b6', '#facc15', '#fb7185', '#c084fc'][k % 4]} roughness={0.7} />
+                </mesh>
+              ))}
+            </group>
+          )}
+        </group>
+      ))}
       {/* side window */}
       <Block position={[0.6, h / 2 + 0.2, 2.52]} size={[1, 0.8, 0.05]} color={TRIM} cast={false} />
       <mesh position={[0.6, h / 2 + 0.2, 2.56]} material={lit ? GLASS_LIT : GLASS_DAY}>
@@ -262,6 +283,49 @@ function House({ id, x, z, i }: { id: string; x: number; z: number; i: number })
         <Block position={[0, 0.4, 0]} size={[0.06, 0.8, 0.06]} color="#8f5527" cast={false} />
         <Block position={[0, 0.85, 0]} size={[0.28, 0.2, 0.4]} color="#ef4444" cast={false} />
       </group>
+
+      {/* personal touches */}
+      {extras.includes('fence') && (
+        <group position={[3.0, 0, 0]}>
+          {Array.from({ length: 18 }, (_, k) => -2.55 + k * 0.3).filter((fz) => fz < 0.35 || fz > 1.65).map((fz) => (
+            <Block key={fz} position={[0, 0.3, fz]} size={[0.06, 0.6, 0.12]} color="#fbf6ee" cast={false} />
+          ))}
+          <Block position={[0, 0.45, -1.1]} size={[0.05, 0.06, 2.9]} color="#fbf6ee" cast={false} />
+          <Block position={[0, 0.2, -1.1]} size={[0.05, 0.06, 2.9]} color="#fbf6ee" cast={false} />
+          <Block position={[0, 0.45, 2.3]} size={[0.05, 0.06, 0.9]} color="#fbf6ee" cast={false} />
+        </group>
+      )}
+      {extras.includes('lights') && (
+        <group position={[1.95, h - 0.12, 0]}>
+          <Block position={[0, 0, 0]} size={[0.02, 0.02, 4.9]} color="#222" cast={false} />
+          {Array.from({ length: 13 }, (_, k) => -2.4 + k * 0.4).map((lz, k) => (
+            <mesh key={lz} position={[0, -0.07 - Math.abs(Math.sin(k * 0.5)) * 0.05, lz]}>
+              <sphereGeometry args={[0.065, 8, 6]} />
+              <meshStandardMaterial color={['#fde047', '#f472b6', '#67e8f9', '#86efac'][k % 4]} emissive={['#fde047', '#f472b6', '#67e8f9', '#86efac'][k % 4]} emissiveIntensity={night ? 2.6 : 0.5} />
+            </mesh>
+          ))}
+        </group>
+      )}
+      {extras.includes('gnome') && (
+        <group position={[2.4, 0, 2.15]} rotation={[0, -0.6, 0]}>
+          <mesh position={[0, 0.17, 0]}><cylinderGeometry args={[0.1, 0.13, 0.34, 8]} /><meshStandardMaterial color="#3b82f6" /></mesh>
+          <mesh position={[0, 0.4, 0]}><sphereGeometry args={[0.095, 10, 8]} /><meshStandardMaterial color="#f5d0b0" /></mesh>
+          <mesh position={[0, 0.33, 0.07]}><sphereGeometry args={[0.07, 8, 6]} /><meshStandardMaterial color="#ffffff" /></mesh>
+          <mesh position={[0, 0.57, 0]}><coneGeometry args={[0.1, 0.3, 8]} /><meshStandardMaterial color="#dc2626" /></mesh>
+        </group>
+      )}
+      {home ? (
+        <group position={[2.6, 0, -1.8]}>
+          <Block position={[0, 0.95, 0]} size={[0.06, 0.4, 0.06]} color="#8f5527" cast={false} />
+          <Sign3D text={`🏡 ${home.owner}`} position={[0.06, 1.3, 0]} rotation={[0, Math.PI / 2, 0]} width={1.5} height={0.38} bg="#166534" border="#bbf7d0" />
+        </group>
+      ) : (
+        <Near x={x + 2.6} z={z - 1.8} r={9}>
+          <Label position={[2.6, 1.5, -1.8]}>
+            <Marker emoji="🏡" text="Free home" color="bg-lime-200" />
+          </Label>
+        </Near>
+      )}
 
       {wasted && (
         <Near x={x} z={z} r={20}>

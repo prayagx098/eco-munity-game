@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { getApiBase } from '../net/net'
 import { useGame } from './gameStore'
 import { loadWallet, saveWallet, type Wallet } from './shop'
+import { useMeta, type MetaData } from './meta'
 
 /**
  * Accounts. A child picks a nickname + password (no email, no real name). The server (MongoDB) keeps that
@@ -84,10 +85,11 @@ export async function api(path: string, init: RequestInit = {}, timeoutMs = 1000
 let applying = false
 
 /** put the saved game from the server into the running game */
-function applyData(data: { profile?: { name: string; shirt: string; hair: string; pants: string }; wallet?: Wallet; badges?: string[] } | undefined) {
+function applyData(data: { profile?: { name: string; shirt: string; hair: string; pants: string }; wallet?: Wallet; badges?: string[]; meta?: Partial<MetaData> } | undefined) {
   if (!data) return
   applying = true
   try {
+    useMeta.getState().hydrate(data.meta ?? null)
     const patch: Record<string, unknown> = {}
     if (data.wallet) {
       saveWallet(data.wallet) // loadWallet() below then fills in today's daily limits etc.
@@ -131,11 +133,14 @@ export const useAuth = create<AuthState>()((set) => ({
   busy: false,
   register: (username, password) => {
     const g = useGame.getState()
-    return authCall('register', { username, password, guestPid, guestData: { profile: g.profile, wallet: g.wallet, badges: g.badges } })
+    return authCall('register', { username, password, guestPid, guestData: { profile: g.profile, wallet: g.wallet, badges: g.badges, meta: useMeta.getState().exportData() } })
   },
   login: (username, password) => authCall('login', { username, password }),
   logout: async () => {
     flushData()
+    applying = true // resetting the screen must not be saved over the account
+    useMeta.getState().hydrate(null)
+    applying = false
     try {
       await api('/api/auth/logout', { method: 'POST' }, 5000)
     } catch {
@@ -203,11 +208,17 @@ function flushData(keepalive = false) {
   const a = useAuth.getState()
   if (a.status !== 'in') return
   const g = useGame.getState()
-  void api('/api/me/data', { method: 'PUT', keepalive, body: JSON.stringify({ data: { profile: g.profile, wallet: g.wallet, badges: g.badges } }) }).catch(() => {})
+  void api('/api/me/data', { method: 'PUT', keepalive, body: JSON.stringify({ data: { profile: g.profile, wallet: g.wallet, badges: g.badges, meta: useMeta.getState().exportData() } }) }).catch(() => {})
 }
 useGame.subscribe((s, p) => {
   if (applying || useAuth.getState().status !== 'in') return
   if (s.wallet === p.wallet && s.profile === p.profile && s.badges === p.badges) return
+  if (timer) clearTimeout(timer)
+  timer = setTimeout(() => flushData(), 1500)
+})
+useMeta.subscribe((s, p) => {
+  if (applying || useAuth.getState().status !== 'in') return
+  if (s.missions === p.missions && s.streak === p.streak && s.week === p.week && s.forest === p.forest && s.home === p.home) return
   if (timer) clearTimeout(timer)
   timer = setTimeout(() => flushData(), 1500)
 })

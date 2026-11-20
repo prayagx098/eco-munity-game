@@ -1,3 +1,4 @@
+import { useMeta } from '../state/meta'
 import { useEffect } from 'react'
 import { useGame } from '../state/gameStore'
 import { keys, view } from '../state/sceneRegistry'
@@ -35,7 +36,8 @@ export function useKeyboard() {
     const down = (e: KeyboardEvent) => {
       const s = useGame.getState()
       if (e.code === 'Escape') {
-        if (s.shopOpen) s.setShop(false)
+        if (useMeta.getState().panel) useMeta.getState().setPanel(null)
+        else if (s.shopOpen) s.setShop(false)
         else if (s.goodsCounter) s.setGoodsCounter(0)
         else if (s.invOpen) s.setInv(false)
         else if (s.binOpen) s.setBin(false)
@@ -62,6 +64,9 @@ export function useKeyboard() {
         case 'KeyE':
           e.preventDefault()
           s.interact()
+          break
+        case 'KeyP':
+          useMeta.getState().setPanel(useMeta.getState().panel ? null : 'missions')
           break
         case 'KeyJ':
           useStory.getState().setBook()

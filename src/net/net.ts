@@ -34,6 +34,7 @@ let synced = false
 let channel: BroadcastChannel | null = null
 let ws: WebSocket | null = null
 let wsConnected = false
+let duplicate = false
 let worldTimer: ReturnType<typeof setTimeout> | null = null
 
 export const DEFAULT_RELAY_URL = 'wss://eco-munity-game.onrender.com'
@@ -132,6 +133,12 @@ function initWebSocket(rawUrl: string) {
 
     ws.onopen = () => {
       clearTimeout(wakeTimer)
+      // first message: who am I (a logged-in account can only be in a room once)
+      try {
+        ws?.send(JSON.stringify({ t: 'auth', token: localStorage.getItem('eco-munity-token') }))
+      } catch {
+        // ignore
+      }
       console.log('✅ [Eco-munity] Connected to multiplayer relay server!')
       wsConnected = true
       useGame.setState({ netStatus: 'connected' })
@@ -151,14 +158,25 @@ function initWebSocket(rawUrl: string) {
     ws.onmessage = (ev) => {
       try {
         const data = typeof ev.data === 'string' ? JSON.parse(ev.data) : JSON.parse(new TextDecoder().decode(ev.data))
+        if (data.t === 'duplicate') {
+          duplicate = true
+          useGame.setState({ netStatus: 'duplicate' })
+          return
+        }
         handle(data)
       } catch (err) {
         console.error('Failed to parse incoming WS message', err)
       }
     }
 
-    ws.onclose = () => {
+    ws.onclose = (ev) => {
       wsConnected = false
+      if (ev.code === 4001 || duplicate) {
+        // this account is already in the room somewhere else: do not reconnect
+        duplicate = true
+        useGame.setState({ netStatus: 'duplicate' })
+        return
+      }
       useGame.setState({ netStatus: 'waking' })
       setTimeout(() => {
         if (getWsUrl()) initWebSocket(rawUrl)
@@ -168,7 +186,7 @@ function initWebSocket(rawUrl: string) {
     ws.onerror = (err) => {
       console.warn('[Eco-munity] Multiplayer relay error:', err)
       wsConnected = false
-      useGame.setState({ netStatus: 'waking' })
+      if (!duplicate) useGame.setState({ netStatus: 'waking' })
     }
   } catch (err) {
     console.error('Invalid WebSocket URL:', err)

@@ -99,7 +99,47 @@ export function sanitizeData(d) {
       daily: w.daily && typeof w.daily === 'object' ? w.daily : null,
     }
   }
+  const meta = sanitizeMeta(d.meta)
+  if (meta) out.meta = meta
   if (Array.isArray(d.badges)) out.badges = d.badges.filter((x) => typeof x === 'string').map((x) => x.slice(0, 40)).slice(0, 100)
+  return out
+}
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/
+const ID = /^[a-z0-9-]{1,24}$/
+const int = (v, min, max) => (Number.isFinite(v) ? Math.max(min, Math.min(max, Math.floor(v))) : min)
+const idList = (a, n) => (Array.isArray(a) ? a.filter((x) => typeof x === 'string' && ID.test(x)).slice(0, n) : [])
+
+/** a player's missions / streak / tree record / home – only the shapes and ranges the game uses */
+export function sanitizeMeta(m) {
+  if (!m || typeof m !== 'object') return null
+  const out = {
+    day: DAY.test(m.day) ? m.day : '',
+    missions: Array.isArray(m.missions)
+      ? m.missions
+          .filter((x) => x && typeof x.id === 'string' && ID.test(x.id))
+          .slice(0, 5)
+          .map((x) => ({ id: x.id, n: int(x.n, 1, 50), got: int(x.got, 0, 50), coins: int(x.coins, 0, 100), claimed: !!x.claimed }))
+      : [],
+    streak: {
+      count: int(m.streak?.count, 0, 3650),
+      best: int(m.streak?.best, 0, 3650),
+      lastDay: DAY.test(m.streak?.lastDay) ? m.streak.lastDay : '',
+      paid: int(m.streak?.paid, 0, 3650),
+    },
+    week: { key: DAY.test(m.week?.key) ? m.week.key : '', done: int(m.week?.done, 0, 100), claimed: !!m.week?.claimed },
+    forest: { planted: int(m.forest?.planted, 0, 1_000_000), harvested: int(m.forest?.harvested, 0, 1_000_000) },
+    home: {
+      house: typeof m.home?.house === 'string' && /^house-\d{1,2}$/.test(m.home.house) ? m.home.house : null,
+      decor: {
+        wall: typeof m.home?.decor?.wall === 'string' && ID.test(m.home.decor.wall) ? m.home.decor.wall : undefined,
+        roof: typeof m.home?.decor?.roof === 'string' && ID.test(m.home.decor.roof) ? m.home.decor.roof : undefined,
+        door: typeof m.home?.decor?.door === 'string' && ID.test(m.home.decor.door) ? m.home.decor.door : undefined,
+        extras: idList(m.home?.decor?.extras, 8),
+      },
+      owned: idList(m.home?.owned, 60),
+    },
+  }
   return out
 }
 
@@ -134,6 +174,14 @@ export async function userOf(req) {
   if (!session) return null
   const user = await store.findUserById(session.userId)
   return user ? { user, hash } : null
+}
+
+/** the user behind a raw bearer token (used by the WebSocket join), or null */
+export async function userByToken(token) {
+  if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{20,100}$/.test(token)) return null
+  const session = await store.findSession(sha256(token))
+  if (!session) return null
+  return (await store.findUserById(session.userId)) || null
 }
 
 const publicUser = (u) => ({ id: u._id, username: u.username, createdAt: u.createdAt })

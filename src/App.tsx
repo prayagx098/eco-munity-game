@@ -5,6 +5,7 @@ import { SceneBoundary } from './components/3DCanvas/SceneBoundary'
 import { HUD } from './components/HUD/HUD'
 import { BigMap } from './components/HUD/MiniMap'
 import { WelcomeModal } from './components/Modals/WelcomeModal'
+import { DuplicateLogin } from './components/Modals/DuplicateLogin'
 import { OrientationGate } from './components/HUD/OrientationGate'
 import { useGameLoop } from './hooks/useGameLoop'
 import { useKeyboard } from './hooks/useKeyboard'
@@ -15,6 +16,7 @@ import { startNet } from './net/net'
 import { setupAutoFullscreen } from './utils/fullscreen'
 
 const BadgesPanel = lazy(() => import('./components/Modals/BadgesPanel').then((m) => ({ default: m.BadgesPanel })))
+const ProgressPanel = lazy(() => import('./components/Modals/ProgressPanel').then((m) => ({ default: m.ProgressPanel })))
 const RoundCompleteModal = lazy(() => import('./components/Modals/RoundCompleteModal').then((m) => ({ default: m.RoundCompleteModal })))
 
 startNet()
@@ -63,9 +65,11 @@ export default function App() {
           <BigMap />
           <Suspense fallback={null}>
             <BadgesPanel />
+            <ProgressPanel />
             <RoundCompleteModal />
           </Suspense>
           <WelcomeModal />
+          <DuplicateLogin />
           <OrientationGate />
         </div>
       </div>

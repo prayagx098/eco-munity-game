@@ -9,6 +9,7 @@ import { useSettings } from '../../state/settings'
 import { footstepsOn, sfx } from '../../audio/audio'
 import { emitPuff } from './Weather'
 import { useStory } from '../../state/story'
+import { useMeta } from '../../state/meta'
 import { VEHICLES, airborne, collides, groundY, zoneAt } from '../../state/world'
 import { Minifig, SpeechBubble, type MinifigAnim } from './NPCs'
 import { TrashShape } from './TrashItems'
@@ -72,7 +73,7 @@ export function Player() {
     const dt = Math.min(rawDt, 0.05)
     const s = useGame.getState()
     const busy = !!act.kind
-    const canMove = s.screen === 'playing' && !s.paused && !s.bigMap && !s.roundComplete && !s.chatWith && !s.shopOpen && !s.goodsCounter && !s.invOpen && !s.binOpen && s.quiz === null && !busy && !useStory.getState().dialog
+    const canMove = s.screen === 'playing' && !s.paused && !s.bigMap && !s.roundComplete && !s.chatWith && !s.shopOpen && !s.goodsCounter && !s.invOpen && !s.binOpen && s.quiz === null && !busy && !useStory.getState().dialog && !useMeta.getState().panel
     const turnTo = (tx: number, tz: number, rate: number) => {
       const diff = Math.atan2(Math.sin(Math.atan2(tx - player.x, tz - player.z) - player.heading), Math.cos(Math.atan2(tx - player.x, tz - player.z) - player.heading))
       player.heading += diff * Math.min(1, dt * rate)

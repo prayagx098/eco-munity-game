@@ -4,7 +4,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { WebSocketServer, WebSocket } from 'ws'
 import * as store from './store.js'
-import { handleAuth, sanitizeStory } from './auth.js'
+import { handleAuth, sanitizeStory, userByToken } from './auth.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DIST_DIR = path.join(__dirname, 'dist')
@@ -303,6 +303,22 @@ const server = http.createServer((req, res) => {
 
 const wss = new WebSocketServer({ server })
 
+// Liveness: ping every 10s; a connection that has been silent for 30s is dropped (so a dead tab never blocks a re-login)
+setInterval(() => {
+  const now = Date.now()
+  for (const ws of wss.clients) {
+    if (now - (ws.lastSeen || now) > 30000) {
+      ws.terminate()
+      continue
+    }
+    try {
+      ws.ping()
+    } catch {
+      // ignore
+    }
+  }
+}, 10000)
+
 // Handle WebSocket connections and persistent live rooms
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`)
@@ -311,27 +327,50 @@ wss.on('connection', (ws, req) => {
 
   ws.room = room.name
   ws.clientId = `client-${Math.random().toString(36).slice(2, 9)}`
-  room.clients.add(ws)
+  ws.lastSeen = Date.now()
+  ws.userId = null
+  ws.on('pong', () => (ws.lastSeen = Date.now()))
 
-  console.log(`🔌 [WS] Client ${ws.clientId} joined room "${room.name}" (${room.clients.size} online)`)
-
-  // 1. Send the saved authoritative world state to the joining player (once it has been loaded from storage)
-  room.loading.then(() => {
-    if (room.world && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ t: 'world', s: room.world, from: 'server' }))
-      console.log(`📤 [WS] Dispatched saved world data to ${ws.clientId} in "${room.name}"`)
+  /**
+   * The first message is {t:'auth', token}. A logged-in account may only be in a room once: a second connection
+   * for the same account is refused (unless the first one has gone silent, i.e. it is really gone).
+   */
+  const join = async (token) => {
+    const user = token ? await userByToken(token).catch(() => null) : null
+    if (user) {
+      for (const other of room.clients) {
+        if (other.userId !== user._id) continue
+        if (Date.now() - (other.lastSeen || 0) > 15000) {
+          other.terminate() // stale connection from the same account
+          room.clients.delete(other)
+        } else {
+          console.log(`⛔ [WS] "${user.username}" is already in room "${room.name}" – refused a second connection`)
+          if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: 'duplicate', from: 'server' }))
+          ws.close(4001, 'already-in-room')
+          return false
+        }
+      }
+      ws.userId = user._id
     }
-  })
+    room.clients.add(ws)
+    console.log(`🔌 [WS] Client ${ws.clientId}${user ? ` (${user.username})` : ''} joined room "${room.name}" (${room.clients.size} online)`)
+    // send the saved authoritative world state once it has been loaded from storage
+    room.loading.then(() => {
+      if (room.world && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ t: 'world', s: room.world, from: 'server' }))
+        console.log(`📤 [WS] Dispatched saved world data to ${ws.clientId} in "${room.name}"`)
+      }
+    })
+    return true
+  }
 
-  // 2. Handle incoming messages from this client
-  ws.on('message', (message, isBinary) => {
+  const relay = (message, isBinary) => {
     let parsed = null
     try {
       parsed = JSON.parse(message.toString())
     } catch {
       // Binary or invalid JSON: just relay to room
     }
-
     if (parsed && typeof parsed === 'object') {
       // Whenever a world snapshot arrives (from the room host or saving player), save & persist it!
       if (parsed.t === 'world' && parsed.s) {
@@ -339,18 +378,40 @@ wss.on('connection', (ws, req) => {
         roomManager.queueSave(room)
       }
     }
-
-    // Relay message to all OTHER clients in the same room
     for (const client of room.clients) {
       if (client !== ws && client.readyState === WebSocket.OPEN) {
         client.send(message, { binary: isBinary })
       }
     }
+  }
+
+  // messages are handled in order, and only after the join decision
+  let ready = null
+  ws.on('message', (message, isBinary) => {
+    ws.lastSeen = Date.now()
+    if (!ready) {
+      let first = null
+      try {
+        first = JSON.parse(message.toString())
+      } catch {
+        // not JSON
+      }
+      if (first && first.t === 'auth') {
+        ready = join(first.token)
+        return
+      }
+      ready = join(null) // older clients send no auth message: treat as guests
+    }
+    ready.then((ok) => ok && relay(message, isBinary))
   })
 
-  // 3. Handle disconnect
+  // a client that never says anything is let in as a guest after a moment
+  setTimeout(() => {
+    if (!ready && ws.readyState === WebSocket.OPEN) ready = join(null)
+  }, 3000)
+
   ws.on('close', () => {
-    room.clients.delete(ws)
+    if (!room.clients.delete(ws)) return // was refused, never joined
     console.log(`👋 [WS] Client ${ws.clientId} left room "${room.name}" (${room.clients.size} remaining)`)
 
     // Notify other peers in the room

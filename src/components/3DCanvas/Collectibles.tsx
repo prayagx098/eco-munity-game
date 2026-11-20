@@ -4,6 +4,7 @@ import type { Group } from 'three'
 import { useGame } from '../../state/gameStore'
 import { bodies } from '../../state/sceneRegistry'
 import { setDynamicObstacle } from '../../state/world'
+import { growth } from '../../state/forest'
 import { Label, LegoTree, Marker, Near, Plastic } from './primitives'
 
 /* ------------------------------------------------------------------ */
@@ -48,17 +49,12 @@ export function Coins() {
 /* Tree-planting spots                                                  */
 /* ------------------------------------------------------------------ */
 
-/** seconds for a planted sapling to become a full tree */
-const GROW_SECS = 150
-
-/** Sprout → seedling → young tree → full tree. Grows slowly and keeps going even for other players. */
 function GrowingTree({ x, z, plantedAt }: { x: number; z: number; plantedAt?: number }) {
   const tree = useRef<Group>(null)
   const sprout = useRef<Group>(null)
   useFrame(() => {
     // saplings saved with an old epoch-ms timestamp (or none) count as fully grown
-    const age = plantedAt !== undefined && plantedAt < 1e9 ? Math.max(0, useGame.getState().elapsed - plantedAt) : GROW_SECS
-    const t = Math.min(1, age / GROW_SECS)
+    const t = growth({ planted: true, plantedAt }, useGame.getState().elapsed)
     // stage 1 (first 12%): just a sprout; afterwards the tree swells with a gentle ease
     const tt = Math.max(0, (t - 0.12) / 0.88)
     const sc = 0.12 + 0.73 * (tt * tt * (3 - 2 * tt))

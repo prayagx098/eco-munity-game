@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { keys, touchInput } from '../../state/sceneRegistry'
+import { keys, player, touchInput } from '../../state/sceneRegistry'
 
 /**
  * Mobile Touch Controls:
@@ -16,6 +16,25 @@ export function TouchControls() {
   const origin = useRef({ x: 0, y: 0 })
   const leftPointerId = useRef<number | null>(null)
   const MAX_R = 46
+
+  // while you ride, the joystick gives way to key-style buttons (steer left/right, gas, brake, boost)
+  const [riding, setRiding] = useState(false)
+  useEffect(() => {
+    const t = setInterval(() => setRiding((r) => (r === !!player.vehicle ? r : !!player.vehicle)), 120)
+    return () => clearInterval(t)
+  }, [])
+  useEffect(() => {
+    if (riding) {
+      // drop any joystick input and held keys when switching mode
+      touchInput.moveX = 0
+      touchInput.moveY = 0
+      touchInput.moveActive = false
+      leftPointerId.current = null
+      setStick(null)
+    } else {
+      for (const k of ['up', 'down', 'left', 'right', 'run']) keys.delete(k)
+    }
+  }, [riding])
 
   useEffect(() => {
     const isTouch =
@@ -86,8 +105,9 @@ export function TouchControls() {
 
   return (
     <>
+      {riding && <RideButtons />}
       {/* 1. LEFT-SIDE TOUCH ZONE: touch anywhere here and drag to move */}
-      <div
+      {!riding && <div
         onPointerDown={handleDown}
         onPointerMove={handleMove}
         onPointerUp={handleUp}
@@ -99,8 +119,8 @@ export function TouchControls() {
             move
           </div>
         )}
-      </div>
-      {stick && (
+      </div>}
+      {stick && !riding && (
         <div className="pointer-events-none fixed z-30" style={{ left: stick.cx, top: stick.cy }}>
           <div className="absolute h-[104px] w-[104px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-cyan-300/70 bg-slate-900/40 shadow-[0_0_20px_rgba(34,211,238,0.35)] backdrop-blur-md" />
           <div
@@ -111,6 +131,7 @@ export function TouchControls() {
       )}
 
       {/* 2. JUMP BUTTON (Bottom-Right, where right thumb naturally rests) */}
+      {!riding && (
       <div className="pointer-events-auto fixed bottom-5 right-5 sm:bottom-6 sm:right-6 z-30 select-none">
         <button
           onPointerDown={(e) => {
@@ -127,6 +148,49 @@ export function TouchControls() {
         >
           🦘
         </button>
+      </div>
+      )}
+    </>
+  )
+}
+
+/** A hold-to-press on-screen key: adds/removes a key from the shared "keys held" set */
+function HoldKey({ k, label, aria, className }: { k: string; label: string; aria: string; className: string }) {
+  const release = () => keys.delete(k)
+  return (
+    <button
+      onPointerDown={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        e.currentTarget.setPointerCapture(e.pointerId)
+        keys.add(k)
+      }}
+      onPointerUp={release}
+      onPointerCancel={release}
+      onLostPointerCapture={release}
+      onContextMenu={(e) => e.preventDefault()}
+      aria-label={aria}
+      className={`pointer-events-auto flex select-none touch-none items-center justify-center rounded-2xl border-2 border-white/60 text-3xl font-black text-white shadow-xl backdrop-blur-md active:scale-95 active:brightness-125 ${className}`}
+    >
+      {label}
+    </button>
+  )
+}
+
+/** Riding controls: ◀ ▶ steer on the left thumb, ▲ gas / ▼ brake (reverse) and ⚡ boost on the right thumb */
+function RideButtons() {
+  return (
+    <>
+      <div className="pointer-events-none fixed bottom-5 left-5 z-30 flex gap-3 sm:bottom-6 sm:left-6">
+        <HoldKey k="left" label="◀" aria="Steer left" className="h-20 w-20 bg-slate-900/55 sm:h-24 sm:w-24" />
+        <HoldKey k="right" label="▶" aria="Steer right" className="h-20 w-20 bg-slate-900/55 sm:h-24 sm:w-24" />
+      </div>
+      <div className="pointer-events-none fixed bottom-5 right-5 z-30 flex items-end gap-3 sm:bottom-6 sm:right-6">
+        <HoldKey k="run" label="⚡" aria="Boost" className="mb-1 h-14 w-14 bg-amber-500/70 text-2xl" />
+        <div className="flex flex-col gap-3">
+          <HoldKey k="up" label="▲" aria="Accelerate" className="h-20 w-20 bg-emerald-600/70 sm:h-24 sm:w-24" />
+          <HoldKey k="down" label="▼" aria="Brake / reverse" className="h-16 w-20 bg-rose-600/65 sm:w-24" />
+        </div>
       </div>
     </>
   )

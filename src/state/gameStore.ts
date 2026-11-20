@@ -15,6 +15,9 @@ import {
   type TrashType,
 } from './gameData'
 import { BIN_SLOTS, HEAPS, LEARNING_BOARD, VEHICLES, MAKER_PADS, MAKER_YARD, initialVehicles, tidyVehicles, RESPAWN_DELAY, SCHOOL_NAME, BIN_CAP, TRUCK_INFO, jobTimes, type VehicleEntity, type VehicleKind, GARDEN_PLOTS, HOUSES, POND, SAPLING_SPOTS, STATIC_NPCS, TAPS, ZONES, collides, distToRect, offPath } from './world'
+import { isGrown, makeRoomForTrees } from './forest'
+import { useMeta } from './meta'
+import type { HomeDecor, HomeState } from './homes'
 import { act, ball, companionPos, dress, emitBurst, npcPositions, player, remotePlayers } from './sceneRegistry'
 import { filterMessage, isKind } from './chatBot'
 import { bridge } from './netBridge'
@@ -65,6 +68,8 @@ export interface SaplingSpot {
   planted: boolean
   /** game-clock seconds (the host's shared `elapsed`) when it was planted, so every player sees the same growth */
   plantedAt?: number
+  /** who planted it */
+  by?: string
 }
 
 export interface ChatMsg {
@@ -115,7 +120,7 @@ export interface Weather {
   storm: boolean
 }
 
-export type InteractionKind = 'pickup' | 'bin' | 'plant' | 'water' | 'lights' | 'tap' | 'feed' | 'look' | 'turn' | 'ride' | 'dog' | 'kick' | 'pet' | 'return-pet' | 'quest' | 'talk' | 'quiz-bowl' | 'adopt' | 'pet-companion' | 'dismiss-companion' | 'whistle'
+export type InteractionKind = 'pickup' | 'bin' | 'plant' | 'water' | 'lights' | 'tap' | 'feed' | 'look' | 'turn' | 'ride' | 'dog' | 'kick' | 'pet' | 'return-pet' | 'quest' | 'talk' | 'quiz-bowl' | 'adopt' | 'pet-companion' | 'dismiss-companion' | 'whistle' | 'harvest' | 'home'
 
 export interface FootballMatch {
   red: number
@@ -222,6 +227,8 @@ export type Action =
   | { kind: 'sort'; slotId: string; typeId: string; fromPond: boolean }
   | { kind: 'drop'; typeId: string; x: number; z: number }
   | { kind: 'plant'; id: string }
+  | { kind: 'harvest'; id: string }
+  | { kind: 'home'; op: 'claim' | 'decor' | 'release'; id: string; decor?: HomeDecor }
   | { kind: 'water'; id: string }
   | { kind: 'lights'; id: string }
   | { kind: 'tap'; id: string }
@@ -263,6 +270,12 @@ export interface ActionResult {
   toast?: Omit<Toast, 'id'>
   stat?: Partial<Stats>
   sfx?: SfxName
+  /** this player's tree record (planted / harvested seeds) */
+  forest?: { planted?: number; harvested?: number }
+  /** coins the player earns (added on their own device) */
+  coins?: number
+  /** their home was claimed (id + decor) or given up (null) */
+  home?: { id: string; decor: HomeDecor } | null
 }
 
 /** Shared world state, broadcast by the host tab */
@@ -272,6 +285,7 @@ export interface WorldSnapshot {
   points: number
   trash: TrashItem[]
   saplings: SaplingSpot[]
+  homes?: Record<string, HomeState>
   plots: Record<string, number>
   lights: Record<string, boolean>
   leaks: Record<string, boolean>
@@ -402,7 +416,7 @@ export interface GameState {
   myId: string
   isHost: boolean
   remotes: Record<string, Profile>
-  netStatus: 'offline' | 'waking' | 'connected'
+  netStatus: 'offline' | 'waking' | 'connected' | 'duplicate'
 
   /* shared world */
   energy: number
@@ -410,6 +424,8 @@ export interface GameState {
   points: number
   trash: TrashItem[]
   saplings: SaplingSpot[]
+  /** Maple Street homes that have been claimed, by house id */
+  homes: Record<string, HomeState>
   plots: Record<string, number>
   lights: Record<string, boolean>
   leaks: Record<string, boolean>
@@ -559,6 +575,7 @@ const initialWorld = () => ({
   points: 0,
   trash: [] as TrashItem[],
   saplings: makeSaplings(),
+  homes: {} as Record<string, HomeState>,
   plots: { 'plot-0': 72, 'plot-1': 20, 'plot-2': 66, 'plot-3': 35 } as Record<string, number>,
   lights: Object.fromEntries(HOUSES.map((h, i) => [h.id, i === 2 || i === 5])) as Record<string, boolean>,
   leaks: Object.fromEntries(TAPS.map((t, i) => [t.id, i === 1])) as Record<string, boolean>,
@@ -623,7 +640,22 @@ export function findInteraction(s: GameState, px: number, pz: number): Interacti
       const type = TRASH_BY_ID[t.typeId]
       add(dist(t.x, t.z), t.inPond ? 3.2 : 1.7, { kind: 'pickup', targetId: t.id, label: `Pick up ${type.label}`, emoji: type.emoji, x: t.x, z: t.z })
     }
-    for (const sp of s.saplings) if (!sp.planted) add(dist(sp.x, sp.z), 1.9, { kind: 'plant', targetId: sp.id, label: 'Plant a tree', emoji: '🌱', x: sp.x, z: sp.z })
+    for (const sp of s.saplings) {
+      if (!sp.planted) add(dist(sp.x, sp.z), 1.9, { kind: 'plant', targetId: sp.id, label: 'Plant a tree', emoji: '🌱', x: sp.x, z: sp.z })
+      else if (isGrown(sp, s.elapsed)) add(dist(sp.x, sp.z), 2.1, { kind: 'harvest', targetId: sp.id, label: 'Harvest seeds (makes room to plant again)', emoji: '🧺', x: sp.x, z: sp.z })
+    }
+    // Maple Street homes: claim a free one, or decorate your own (the mailbox is the "door" for this)
+    {
+      const me = s.profile.name
+      const myHouse = Object.entries(s.homes).find(([, h]) => h.owner === me)?.[0]
+      for (const h of HOUSES) {
+        const mx = h.x + 2.6
+        const mz = h.z - 1.8
+        const owned = s.homes[h.id]
+        if (!owned && !myHouse) add(dist(mx, mz), 2.2, { kind: 'home', targetId: h.id, label: 'Claim this home', emoji: '🏡', x: mx, z: mz })
+        else if (owned?.owner === me) add(dist(mx, mz), 2.2, { kind: 'home', targetId: h.id, label: 'Decorate your home', emoji: '🎨', x: mx, z: mz })
+      }
+    }
     for (const p of GARDEN_PLOTS)
       if (s.plots[p.id] >= 60) add(distToRect(px, pz, p), 1.2, { kind: 'water', targetId: p.id, label: `Water the ${p.crop}s`, emoji: '💧', x: (p.x0 + p.x1) / 2, z: (p.z0 + p.z1) / 2 })
     for (const h of HOUSES) if (s.lights[h.id]) add(dist(h.door[0], h.door[1]), 2.3, { kind: 'lights', targetId: h.id, label: 'Switch off the wasted lights', emoji: '💡', x: h.door[0], z: h.door[1] })
@@ -1268,6 +1300,8 @@ export const useGame = create<GameState>()((set, get) => {
         water: [1.1, 0.5],
         tap: [1.1, 0.55],
         plant: [1.1, 0.5],
+        harvest: [1.1, 0.5],
+        home: [0.5, 0.3],
         lights: [0.8, 0.4],
         look: [1.3, 0.5],
         dog: [1.0, 0.45],
@@ -1322,6 +1356,14 @@ export const useGame = create<GameState>()((set, get) => {
           return
         case 'plant':
           return get().dispatch({ kind: 'plant', id: n.targetId })
+        case 'harvest':
+          return get().dispatch({ kind: 'harvest', id: n.targetId })
+        case 'home': {
+          const mine = s.homes[n.targetId]?.owner === s.profile.name
+          if (mine) useMeta.getState().setPanel('home')
+          else get().dispatch({ kind: 'home', op: 'claim', id: n.targetId, decor: useMeta.getState().home.decor })
+          return
+        }
         case 'water':
           return get().dispatch({ kind: 'water', id: n.targetId })
         case 'lights':
@@ -1415,6 +1457,13 @@ export const useGame = create<GameState>()((set, get) => {
         player.vspeed = 0
       }
       if (r.stat) set((s) => ({ stats: Object.fromEntries(Object.entries(s.stats).map(([k, v]) => [k, v + ((r.stat as Record<string, number>)[k] ?? 0)])) as unknown as Stats }))
+      {
+        const meta = useMeta.getState()
+        if (r.forest) meta.recordForest(r.forest)
+        if (r.stat || r.forest?.harvested) meta.record({ ...(r.stat ?? {}), ...(r.forest?.harvested ? { harvested: r.forest.harvested } : {}) })
+        if (r.coins) get().addCoins(r.coins, 'Seeds sold to the Forest Reserve', true)
+        if (r.home !== undefined) meta.setHome(r.home ? r.home.id : null, r.home?.decor && Object.keys(r.home.decor).length ? r.home.decor : undefined)
+      }
       if (r.toast) get().pushToast(r.toast)
       if (r.sfx) sfx(r.sfx)
       get().checkBadges()
@@ -1491,11 +1540,43 @@ export const useGame = create<GameState>()((set, get) => {
             player.x = spot.x + Math.sin(angle) * safeDist
             player.z = spot.z + Math.cos(angle) * safeDist
           }
-          set({ saplings: s.saplings.map((p) => (p.id === spot.id ? { ...p, planted: true, plantedAt: s.elapsed } : p)) })
+          set({ saplings: s.saplings.map((p) => (p.id === spot.id ? { ...p, planted: true, plantedAt: s.elapsed, by: actor.name } : p)) })
           get().reward({ points: 15, energy: 5, happiness: 3, x: spot.x, z: spot.z, label: '+15 🌳' })
           get().progress(['plant-tree'])
           team('🌳', 'planted a tree!')
-          return { sfx: 'plant', stat: { trees: 1 }, toast: { kind: 'good', emoji: '🌳', title: 'You planted a tree!', text: tips ? 'Trees clean the air and give animals a home.' : undefined } }
+          return { sfx: 'plant', stat: { trees: 1 }, forest: { planted: 1 }, toast: { kind: 'good', emoji: '🌳', title: 'You planted a tree!', text: tips ? 'It starts as a tiny sprout and takes a couple of minutes to grow. Check on it in 🎯 → My Trees.' : undefined } }
+        }
+        case 'harvest': {
+          const spot = s.saplings.find((p) => p.id === a.id)
+          if (!spot || !isGrown(spot, s.elapsed)) return { toast: { kind: 'info', emoji: '🌱', title: 'That tree is still growing', text: 'Come back when it is fully grown.' } }
+          set({ saplings: s.saplings.map((p) => (p.id === spot.id ? { ...p, planted: false, plantedAt: undefined, by: undefined } : p)) })
+          get().reward({ points: 8, energy: 2, happiness: 2, x: spot.x, z: spot.z, label: '+8 🧺' })
+          team('🧺', 'harvested seeds from a grown tree!')
+          return { sfx: 'coin', forest: { harvested: 1 }, coins: 6, toast: { kind: 'good', emoji: '🧺', title: 'Seeds collected!', text: 'The plot is empty again, so there is always room to plant a new tree.' } }
+        }
+        case 'home': {
+          const h = HOUSES.find((x) => x.id === a.id)
+          if (!h) return null
+          const cur = s.homes[h.id]
+          if (a.op === 'release') {
+            if (cur?.owner !== actor.name) return null
+            const { [h.id]: _gone, ...rest } = s.homes
+            void _gone
+            set({ homes: rest })
+            return { home: null, toast: { kind: 'info', emoji: '🏠', title: 'You moved out', text: 'The home is free for someone else.' } }
+          }
+          if (a.op === 'claim') {
+            if (cur && cur.owner !== actor.name) return { toast: { kind: 'info', emoji: '🏠', title: `That home belongs to ${cur.owner}` } }
+            // one home per player
+            const homes: Record<string, HomeState> = Object.fromEntries(Object.entries(s.homes).filter(([, v]) => v.owner !== actor.name))
+            homes[h.id] = { owner: actor.name, ...(a.decor ?? {}) }
+            set({ homes })
+            team('🏡', 'moved into a Maple Street home!')
+            return { sfx: 'fanfare', home: { id: h.id, decor: a.decor ?? {} }, toast: { kind: 'good', emoji: '🏡', title: 'Welcome home!', text: 'Press E at your mailbox to decorate it with the coins you earn.' } }
+          }
+          if (cur?.owner !== actor.name) return null
+          set({ homes: { ...s.homes, [h.id]: { owner: actor.name, ...(a.decor ?? {}) } } })
+          return { sfx: 'chat' }
         }
         case 'water': {
           if ((s.plots[a.id] ?? 0) < 60) return null
@@ -1629,6 +1710,7 @@ export const useGame = create<GameState>()((set, get) => {
         points: s.points,
         trash: s.trash,
         saplings: s.saplings,
+        homes: s.homes,
         plots: s.plots,
         lights: s.lights,
         leaks: s.leaks,
@@ -1659,6 +1741,7 @@ export const useGame = create<GameState>()((set, get) => {
       set({
         ...rest,
         vehicles: tidyVehicles(rest.vehicles ?? []),
+        homes: rest.homes ?? {},
         tasks,
         ...(stats ? { stats } : {}),
       })
@@ -1761,7 +1844,8 @@ export const useGame = create<GameState>()((set, get) => {
       const fresh = SAPLING_SPOTS.filter(([x, z]) => !used.has(`${x},${z}`))
         .slice(0, Math.max(needTrees, 2))
         .map(([x, z]) => ({ id: nid('sapling'), x, z, planted: false }))
-      set({ round, tasks, roundComplete: false, saplings: [...s.saplings, ...fresh] })
+      // the forest has a fixed number of plots: if none are free, the oldest fully grown trees are retired to make room
+      set({ round, tasks, roundComplete: false, saplings: makeRoomForTrees([...s.saplings, ...fresh], s.elapsed, Math.max(needTrees, 2)) })
       if (tasks.some((t) => t.kind === 'pond-clean')) [0, 1, 2].forEach(() => get().spawnTrash(...randomPondSpot(), true))
       if (tasks.some((t) => t.kind === 'lights-off')) set((st) => ({ lights: { ...st.lights, [HOUSES[1].id]: true, [HOUSES[6].id]: true } }))
       if (tasks.some((t) => t.kind === 'turn-compost')) set((st) => ({ heaps: { ...st.heaps, [HEAPS[0].id]: true, [HEAPS[2].id]: true } }))
