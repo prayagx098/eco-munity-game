@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { PerformanceMonitor } from '@react-three/drei'
+import { PerformanceMonitor, Stats } from '@react-three/drei'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import * as THREE from 'three'
 import { useGame, dayPhase, getTownEcoStatus } from '../../state/gameStore'
@@ -34,11 +34,12 @@ import { Saplings } from './Collectibles'
 import { Player } from './Player'
 import { Stands, Traffic } from './Vehicles'
 import { Roads } from './Roads'
-import { CompostYard, RecyclingCenter, WastePlant } from './Depots'
+import { EcoHub } from './Depots'
 import { Trucks } from './Trucks'
 import { Signposts } from './Signposts'
 import { School, SportsGround } from './School'
 import { Store } from './Store'
+import { GreenHeart } from './GreenHeart'
 import { Gadgets } from './Gadgets'
 import { Heaps } from './Fun'
 import { Bursts, Fireflies, Floaters } from './Effects'
@@ -343,20 +344,49 @@ function DayNightLighting() {
   )
 }
 
-/** Watches the frame rate; in Auto mode, steps quality down if the device struggles */
+/**
+ * Watches the frame rate. In every mode the render resolution scales down when frames drop and back up
+ * when there is headroom; in Auto mode it also steps the quality preset down if the device keeps struggling.
+ */
 function AutoQuality() {
   const quality = useSettings((s) => s.quality)
-  if (quality !== 'auto') return null
+  const resolved = useSettings((s) => s.resolved)
+  const setDpr = useThree((s) => s.setDpr)
+  const max = Math.min(PRESETS[resolved].dpr, window.devicePixelRatio || 1)
   return (
     <PerformanceMonitor
       bounds={() => [26, 50]}
       flipflops={3}
+      onChange={({ factor }) => setDpr(Math.max(1, Math.min(max, 1 + (max - 1) * factor)))}
       onDecline={() => {
+        if (quality !== 'auto') return
         const q = useSettings.getState().downgrade()
         if (q) useGame.getState().pushToast({ kind: 'info', emoji: '⚙️', title: `Graphics lowered to ${PRESETS[q].label}`, text: 'The game was running slowly. Change it any time in Settings.' })
       }}
     />
   )
+}
+
+/** Dev overlay (add ?stats to the URL): FPS / frame time graph plus live draw calls, triangles and geometry counts */
+function DebugStats() {
+  const gl = useThree((s) => s.gl)
+  const el = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const d = document.createElement('div')
+    d.style.cssText = 'position:fixed;left:0;top:50px;z-index:99999;font:11px monospace;color:#0f0;background:#000a;padding:3px 6px;pointer-events:none;white-space:pre'
+    document.body.appendChild(d)
+    el.current = d
+    return () => d.remove()
+  }, [])
+  const acc = useRef(0)
+  useFrame((_, dt) => {
+    acc.current += dt
+    if (acc.current < 0.5 || !el.current) return
+    acc.current = 0
+    const i = gl.info
+    el.current.textContent = `calls ${i.render.calls}  tris ${(i.render.triangles / 1000).toFixed(1)}k\ngeom ${i.memory.geometries}  tex ${i.memory.textures}  dpr ${gl.getPixelRatio().toFixed(2)}`
+  })
+  return <Stats />
 }
 
 /** Night-time glow around lamps and windows (High quality only) */
@@ -409,6 +439,7 @@ export function GameCanvas() {
       }}
     >
       <AutoQuality />
+      {new URLSearchParams(location.search).has('stats') && <DebugStats />}
       <FpsProbe />
       <EnvDriver />
       <NatureClock />
@@ -427,9 +458,8 @@ export function GameCanvas() {
       <SportsGround />
       <Store />
       <Gadgets />
-      <RecyclingCenter />
-      <WastePlant />
-      <CompostYard />
+      <EcoHub />
+      <GreenHeart />
       <Trucks />
       <Farm />
       <Trees />

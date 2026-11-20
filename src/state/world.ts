@@ -108,11 +108,23 @@ export const GOALS = [
   { id: 'north', x0: -49.25, x1: -43.75 },
   { id: 'south', x0: -49.25, x1: -43.75 },
 ] as const
-export const RECYCLING_CENTER = rect(-12, -30, 8, 6)
+/**
+ * The Eco Waste Hub: ONE building split into three bays, out west where there is plenty of room.
+ * From west to east: compost bay, recycling bay, waste-to-energy bay. Each bay opens onto a shared paved yard on its south side.
+ */
+export const ECO_HUB = rect(-56, -34.5, 24, 10)
+/** z of the open front of the hub (the yard side) */
+export const HUB_FACE_Z = ECO_HUB.z1
+export const COMPOST_BAY = rect(-64, -34.5, 8, 10)
+export const RECYCLING_CENTER = rect(-56, -34.5, 8, 10)
 /** where trash from the blue bins is burned for energy */
-export const WASTE_PLANT = rect(-12, -38.5, 8, 5)
-/** the compost heap at Happy Farm that the compost truck feeds */
-export const COMPOST_YARD: XZ = [41, 9]
+export const WASTE_PLANT = rect(-48, -34.5, 8, 10)
+/** the compost bay's pit (the compost truck feeds it) */
+export const COMPOST_YARD: XZ = [-64, -34.5]
+/** the paved yard in front of the hub */
+export const HUB_YARD = { x0: -68, x1: -44, z0: HUB_FACE_Z, z1: -21.7 }
+/** the Green Heart crystal on its pedestal in the plaza (the story's centrepiece) */
+export const HEART_POS: XZ = [-2.6, -3.4]
 export const BARN = rect(36, 14, 7, 6)
 export const POND = { x: 20, z: -20, r: 6 }
 
@@ -143,7 +155,7 @@ export const TAPS = [
 
 /** Compost heaps that need turning so the scraps rot into soil */
 export const HEAPS = [
-  { id: 'heap-0', x: -5.5, z: -26, zone: 'Recycling Center' },
+  { id: 'heap-0', x: -5.5, z: -26, zone: 'CYBERSQUARE' },
   { id: 'heap-1', x: 26.8, z: 12, zone: 'Community Garden' },
   { id: 'heap-2', x: -18, z: 24, zone: 'Community Park' },
 ] as const
@@ -158,7 +170,6 @@ export const STANDS: { id: string; kind: VehicleKind; x: number; z: number; rot:
   { id: 'stand-1', kind: 'bike', x: -14.5, z: -4.5, rot: 2.2 },
   { id: 'stand-2', kind: 'bike', x: 44, z: 3.6, rot: 1.2 },
   { id: 'stand-3', kind: 'bike', x: 50.5, z: -9, rot: 1.6 },
-  { id: 'stand-4', kind: 'bike', x: 4.5, z: -49, rot: 0.2 },
   { id: 'stand-5', kind: 'bike', x: 14, z: 26, rot: 1 },
 ]
 /** A rentable vehicle standing somewhere in town (at a stand, or parked where somebody left it) */
@@ -192,6 +203,8 @@ export const NO_GRASS: Rect[] = [
   SCHOOL_BUILDING,
   ...ROADS_EW.map((r) => ({ x0: -WORLD_HALF - 1, x1: WORLD_HALF + 1, z0: r.z - 4.8, z1: r.z + 4.8 })),
   SCHOOL,
+  ECO_HUB,
+  HUB_YARD,
   { x0: STORE.x0 - 1, x1: STORE.x1 + 1, z0: STORE.z0 - 1, z1: MAKER_YARD.z1 + 0.5 },
 ]
 
@@ -231,14 +244,14 @@ export const UNLOAD_TIME = 8.5
 export const EMPTIED_AT = 0.66
 /** where each truck backs up to its depot (rear toward the building / heap) */
 export const TRUCK_PARK: Record<'recycle' | 'compost' | 'trash', { x: number; z: number; heading: number }> = {
-  recycle: { x: -11.5, z: -23.9, heading: 0 },
-  compost: { x: 38, z: 9, heading: -Math.PI / 2 },
-  trash: { x: -18.2, z: -39.7, heading: -Math.PI / 2 },
+  recycle: { x: -56, z: -25.4, heading: 0 },
+  compost: { x: -64, z: -25.4, heading: 0 },
+  trash: { x: -48, z: -25.4, heading: 0 },
 }
 
 /** Waypoints the trucks drive between (all of them lie on footpaths / service roads) */
 export const TRUCK_NODES: XZ[] = [
-  [-12, -25], // 0 recycling yard (home of the recycling truck)
+  [-12, -26.5], // 0 junction at the end of the old recycling road
   [-12, 0], // 1
   [0, 0], // 2 plaza centre
   [12, 0], // 3
@@ -253,19 +266,26 @@ export const TRUCK_NODES: XZ[] = [
   [34, 0], // 12
   [34, 9], // 13
   [30.5, 9], // 14 farm bins
-  [38.6, 9], // 15 compost yard (home of the compost truck)
-  [-17.6, -25], // 16
-  [-17.6, -38.5], // 17 waste plant yard (home of the trash truck)
+  [38.6, 9], // 15 (spare)
+  [-17.6, -26.5], // 16 east of the main road
+  [-42, -26.5], // 17 service road west of Maple Street
+  [-42, -22.5], // 18
+  [-48, -22.5], // 19 yard lane in front of the waste-to-energy bay
+  [-56, -22.5], // 20 ... recycling bay
+  [-64, -22.5], // 21 ... compost bay
+  [-48, -26.5], // 22 waste truck home (waste-to-energy bay)
+  [-56, -26.5], // 23 recycling truck home
+  [-64, -26.5], // 24 compost truck home
 ]
 export const TRUCK_EDGES: [number, number][] = [
-  [0, 1], [1, 7], [7, 2], [2, 3], [3, 4], [4, 5], [5, 6], [2, 8], [8, 9], [9, 10], [4, 11], [11, 12], [12, 13], [13, 14], [13, 15], [0, 16], [16, 17],
+  [0, 1], [1, 7], [7, 2], [2, 3], [3, 4], [4, 5], [5, 6], [2, 8], [8, 9], [9, 10], [4, 11], [11, 12], [12, 13], [13, 14], [0, 16], [16, 17], [17, 18], [18, 19], [19, 20], [20, 21], [19, 22], [20, 23], [21, 24],
 ]
-export const TRUCK_HOME: Record<'recycle' | 'compost' | 'trash', number> = { recycle: 0, compost: 15, trash: 17 }
+export const TRUCK_HOME: Record<'recycle' | 'compost' | 'trash', number> = { recycle: 23, compost: 24, trash: 22 }
 export const STATION_DOCK: Record<string, number> = { plaza: 7, park: 6, river: 10, farm: 14 }
 export const TRUCK_INFO = {
-  recycle: { name: 'Recycling truck', emoji: '♻️', color: '#16a34a', dest: 'the Recycling Center' },
-  compost: { name: 'Compost truck', emoji: '🌱', color: '#b45309', dest: 'the compost heap at Happy Farm' },
-  trash: { name: 'Waste truck', emoji: '🗑️', color: '#475569', dest: 'the Waste-to-Energy Plant' },
+  recycle: { name: 'Recycling truck', emoji: '♻️', color: '#16a34a', dest: 'the Eco Waste Hub recycling bay' },
+  compost: { name: 'Compost truck', emoji: '🌱', color: '#b45309', dest: 'the Eco Waste Hub compost bay' },
+  trash: { name: 'Waste truck', emoji: '🗑️', color: '#475569', dest: 'the Eco Waste Hub energy bay' },
 } as const
 
 /** shortest drive between two waypoints (Dijkstra over the truck network) */
@@ -378,7 +398,7 @@ const T = {
   school: { label: '🏫 CYBERSQUARE school', x: 0, z: -17, color: '#1e3a8a' },
   sports: { label: '⚽ Sports Ground', x: -46, z: -3, color: '#15803d' },
   maple: { label: '🏘️ Maple Street', x: -31, z: -25, color: '#c2410c' },
-  recycle: { label: '♻️ Recycling Center', x: -12, z: -30, color: '#047857' },
+  recycle: { label: '♻️ Eco Waste Hub', x: -56, z: -33, color: '#047857' },
   learning: { label: '📚 Learning Corner', x: 0, z: -54, color: '#4338ca' },
   forest: { label: '🌲 Pine Forest', x: 38, z: -35, color: '#166534' },
   woods: { label: '🌳 Whispering Woods', x: 0, z: 42, color: '#15803d' },
@@ -437,6 +457,7 @@ export const TREES: [number, number, number][] = TREES_ALL.filter(
     ROADS_EW.every((r) => Math.abs(z - r.z) > 5.5) &&
     !(x > 9.5 && x < 30.5 && z > -30.5 && z < -10) &&
     !(x > SCHOOL_BUILDING.x0 - 1.5 && x < SCHOOL_BUILDING.x1 + 1.5 && z > SCHOOL_BUILDING.z0 - 1.5 && z < SCHOOL_BUILDING.z1 + 1.5) &&
+    !(x > ECO_HUB.x0 - 3 && x < ECO_HUB.x1 + 3 && z > ECO_HUB.z0 - 3 && z < HUB_YARD.z1 + 3) &&
     !(x > STORE.x0 - 2.5 && x < STORE.x1 + 2.5 && z > STORE.z0 - 2.5 && z < MAKER_YARD.z1 + 2.5),
 )
 
@@ -453,6 +474,7 @@ function marginTrees(): [number, number, number][] {
     if (ROADS_EW.some((r) => Math.abs(z - r.z) < 5.5)) continue
     if (z > RIVER.z0 - 2.5 && z < RIVER.z1 + 2.5) continue
     if (x > 53 && z > -25 && z < 31) continue // beach and sea
+    if (x > ECO_HUB.x0 - 4 && x < ECO_HUB.x1 + 4 && z > ECO_HUB.z0 - 4 && z < HUB_YARD.z1 + 4) continue // the Eco Waste Hub
     out.push([x, z, 0.9 + rnd() * 0.5])
   }
   return out
@@ -502,13 +524,13 @@ export const ZONES: Zone[] = [
   { id: 'learning', name: 'Learning Corner', emoji: '📚', x0: -20, x1: 28, z0: -WORLD_HALF, z1: -43 },
   { id: 'meadow', name: 'Butterfly Meadow', emoji: '🦋', x0: 14, x1: WORLD_HALF, z0: 46, z1: WORLD_HALF },
   { id: 'plaza', name: 'Town Plaza', emoji: '🏙️', x0: -10, x1: 10, z0: -7, z1: 7 },
-  { id: 'recycling', name: 'Recycling Center', emoji: '♻️', x0: -20, x1: -4, z0: -42, z1: -22 },
   { id: 'park', name: 'Duck Pond Park', emoji: '🦆', x0: 10, x1: 30, z0: -32, z1: -6 },
   { id: 'forest', name: 'Pine Forest', emoji: '🌲', x0: 28, x1: WORLD_HALF, z0: -WORLD_HALF, z1: -24 },
   { id: 'solar', name: 'Sunny Fields', emoji: '☀️', x0: 30, x1: WORLD_HALF, z0: -22, z1: -3 },
   { id: 'garden', name: 'Community Garden', emoji: '🥕', x0: 11, x1: 26, z0: 3, z1: 18 },
   { id: 'farm', name: 'Happy Farm', emoji: '🐔', x0: 26, x1: 45, z0: 3, z1: 29 },
   { id: 'school', name: 'CYBERSQUARE', emoji: '🏫', x0: -10, x1: 10, z0: -27, z1: -7 },
+  { id: 'ecohub', name: 'Eco Waste Hub', emoji: '♻️', x0: -70, x1: -41, z0: -42, z1: -20 },
   { id: 'sports', name: 'Sports Ground', emoji: '⚽', x0: -WORLD_HALF, x1: -34, z0: -21, z1: 15 },
   { id: 'street', name: 'Maple Street', emoji: '🏘️', x0: -WORLD_HALF, x1: -20, z0: -WORLD_HALF, z1: 29 },
   { id: 'river', name: 'Sparkle River', emoji: '🌊', x0: -WORLD_HALF, x1: WORLD_HALF, z0: 28, z1: 38 },
@@ -529,10 +551,12 @@ export const PATHS: Rect[] = [
   { x0: -1.5, x1: 1.5, z0: -50, z1: -24.5 }, // north to Learning Corner
   { x0: -1.5, x1: 1.5, z0: 6, z1: 45.5 }, // south (over the bridge)
   // service roads for the waste trucks
-  { x0: -18.5, x1: -11.2, z0: -25.8, z1: -24.2 },
-  { x0: -18.5, x1: -16.7, z0: -40, z1: -24.2 },
+  { x0: -20.5, x1: -11.2, z0: -27.3, z1: -25.7 },
+  { x0: -42.8, x1: -27.8, z0: -27.3, z1: -25.7 }, // service road to the Eco Waste Hub
+  { x0: -42.8, x1: -41.2, z0: -27.3, z1: -21.7 },
+  { x0: -44, x1: -41.2, z0: -23.3, z1: -21.7 },
+  HUB_YARD,
   { x0: 30, x1: 33.5, z0: 8.4, z1: 9.6 },
-  { x0: 33.5, x1: 39.6, z0: 8.2, z1: 9.8 },
   { x0: 14.5, x1: 16.5, z0: -12, z1: -1.5 }, // to park
   { x0: 9, x1: 16.5, z0: -16, z1: -12 }, // park plaza
   // a walkway all the way round the duck pond
@@ -602,12 +626,11 @@ const pad = (r: Rect, p = 0.1): Rect => ({ x0: r.x0 - p, x1: r.x1 + p, z0: r.z0 
 
 export const OBSTACLE_RECTS: Rect[] = [
   pad(SCHOOL_BUILDING, 0.4),
-  pad(WASTE_PLANT, 0.3),
+  pad(ECO_HUB, 0.3),
   pad(SCHOOL_W, 0.2),
   pad(SCHOOL_E, 0.2),
   pad(SCHOOL_S, 0.2),
   ...SCHOOL_WALLS.map((w) => pad(w, 0.1)),
-  pad(RECYCLING_CENTER, 0.3),
   pad(BARN, 0.3),
   ...HOUSES.map((h) => rect(h.x, h.z, 3.4, 5)),
   ...GARDEN_PLOTS.map((p) => pad(p, 0.15)),
@@ -621,7 +644,8 @@ export const OBSTACLE_RECTS: Rect[] = [
   { x0: SEA.x0, x1: SEA.x1 + 5, z0: PIER.z1, z1: SEA.z1 },
   // low wall between road and town (gaps for the west path and the north road)
   { x0: -20.8, x1: -20.2, z0: -WORLD_HALF, z1: -49.6 },
-  { x0: -20.8, x1: -20.2, z0: -44.4, z1: -2 },
+  { x0: -20.8, x1: -20.2, z0: -44.4, z1: -27.8 },
+  { x0: -20.8, x1: -20.2, z0: -25.2, z1: -2 },
   { x0: -20.8, x1: -20.2, z0: 2, z1: 28 },
 ]
 
@@ -649,23 +673,29 @@ const PROP_RECTS: Rect[] = [
   ...ROADS_EW.flatMap((r) => [thin(-WORLD_HALF + 1.3, -WORLD_HALF + 1.5, r.z - 2.6, r.z + 2.6), thin(WORLD_HALF - 1.5, WORLD_HALF - 1.3, r.z - 2.6, r.z + 2.6)]),
 ]
 OBSTACLE_RECTS.push(...PROP_RECTS)
+/** Height of the player's feet above the ground (set by Player while jumping) so low obstacles can be hopped over */
+export const airborne = { h: 0 }
+/** Obstacle heights for things low enough to jump over (everything else is too tall) */
+const LOW_HEIGHT = new Map<object, number>()
+for (const r of PROP_RECTS) LOW_HEIGHT.set(r, 0.55)
+const lowCircle = <T extends object>(c: T, h: number): T => (LOW_HEIGHT.set(c, h), c)
 OBSTACLE_RECTS.push(...STORE_WALLS)
 
 export const OBSTACLE_CIRCLES: Circle[] = [
   ...LAMPS.map(([x, z]) => ({ x, z, r: 0.3 })),
   ...BENCHES.flatMap(([x, z, r]) => [
-    { x: x + Math.cos(r) * 0.7, z: z - Math.sin(r) * 0.7, r: 0.5 },
-    { x: x - Math.cos(r) * 0.7, z: z + Math.sin(r) * 0.7, r: 0.5 },
+    lowCircle({ x: x + Math.cos(r) * 0.7, z: z - Math.sin(r) * 0.7, r: 0.5 }, 0.5),
+    lowCircle({ x: x - Math.cos(r) * 0.7, z: z + Math.sin(r) * 0.7, r: 0.5 }, 0.5),
   ]),
   ...SIGNPOSTS.map((sp) => ({ x: sp.x, z: sp.z, r: 0.35 })),
-  ...TAPS.map((t) => ({ x: t.x, z: t.z, r: 0.3 })),
+  ...TAPS.map((t) => lowCircle({ x: t.x, z: t.z, r: 0.3 }, 0.5)),
   ...HEAPS.map((h) => ({ x: h.x, z: h.z, r: 1.2 })),
   { x: 40.7, z: 13, r: 1.2 }, // silo
-  { x: COMPOST_YARD[0], z: COMPOST_YARD[1], r: 1.5 }, // compost heap
   { x: 51.5, z: -6, r: 1.1 }, // lifeguard tower
   ...([[50, -14], [52, 9], [49.5, 20], [53, -2.5]] as XZ[]).map(([x, z]) => ({ x, z, r: 0.3 })), // umbrellas
   { x: 52.5, z: 17, r: 0.9 }, // sandcastle
   { x: LEARNING_BOARD[0], z: LEARNING_BOARD[1], r: 0.5 },
+  { x: HEART_POS[0], z: HEART_POS[1], r: 0.9 },
   ...([[-8, -58, 1.6], [8.5, -57, 1.3], [-9, -52, 1], [10, -51, 1.2], [14, -55, 1.8], [-14, -55, 1.5]] as [number, number, number][]).map(([x, z, s]) => ({ x, z, r: s * 0.8 })),
   { x: POND.x, z: POND.z, r: POND.r + 0.8 },
   { x: EWASTE_BIN[0], z: EWASTE_BIN[1], r: 0.5 },
@@ -678,11 +708,12 @@ export const OBSTACLE_CIRCLES: Circle[] = [
 export function collides(x: number, z: number, r = 0.4, fromX?: number, fromZ?: number): boolean {
   if (Math.abs(x) > WORLD_HALF - r || Math.abs(z) > WORLD_HALF - r) return true
   for (const o of OBSTACLE_RECTS) {
+    if (airborne.h > (LOW_HEIGHT.get(o) ?? Infinity)) continue
     const cx = Math.max(o.x0, Math.min(x, o.x1))
     const cz = Math.max(o.z0, Math.min(z, o.z1))
     if ((x - cx) ** 2 + (z - cz) ** 2 < r * r) return true
   }
-  for (const c of OBSTACLE_CIRCLES) if ((x - c.x) ** 2 + (z - c.z) ** 2 < (r + c.r) ** 2) return true
+  for (const c of OBSTACLE_CIRCLES) if (airborne.h <= (LOW_HEIGHT.get(c) ?? Infinity) && (x - c.x) ** 2 + (z - c.z) ** 2 < (r + c.r) ** 2) return true
   for (const c of dynamicCircles.values()) {
     const d2 = (x - c.x) ** 2 + (z - c.z) ** 2
     const r2 = (r + c.r) ** 2

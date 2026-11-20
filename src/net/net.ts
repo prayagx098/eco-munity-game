@@ -55,6 +55,20 @@ export function getWsUrl(): string | null {
   return null
 }
 
+/** HTTP address of the same server (used for the story-progress API stored in MongoDB) */
+export function getApiBase(): string | null {
+  if (typeof window === 'undefined') return null
+  const envApi = (import.meta as any).env?.VITE_API_URL
+  if (envApi) return String(envApi).replace(/\/$/, '')
+  const ws = getWsUrl()
+  if (ws) {
+    const full = resolveWsUrl(ws)
+    return full.replace('wss://', 'https://').replace('ws://', 'http://').split('?')[0].replace(/\/$/, '')
+  }
+  // local development: the relay/storage server listens on 8080
+  return `http://${window.location.hostname || 'localhost'}:8080`
+}
+
 function resolveWsUrl(raw: string): string {
   if (raw.startsWith('ws://') || raw.startsWith('wss://')) return raw
   if (raw.startsWith('http://')) return 'ws://' + raw.slice(7)

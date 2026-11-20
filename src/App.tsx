@@ -1,12 +1,10 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { MotionConfig } from 'framer-motion'
 import { GameCanvas } from './components/3DCanvas/GameCanvas'
 import { SceneBoundary } from './components/3DCanvas/SceneBoundary'
 import { HUD } from './components/HUD/HUD'
 import { BigMap } from './components/HUD/MiniMap'
 import { WelcomeModal } from './components/Modals/WelcomeModal'
-import { RoundCompleteModal } from './components/Modals/RoundCompleteModal'
-import { BadgesPanel } from './components/Modals/BadgesPanel'
 import { OrientationGate } from './components/HUD/OrientationGate'
 import { useGameLoop } from './hooks/useGameLoop'
 import { useKeyboard } from './hooks/useKeyboard'
@@ -15,6 +13,9 @@ import { useGame } from './state/gameStore'
 import { PRESETS, useSettings } from './state/settings'
 import { startNet } from './net/net'
 import { setupAutoFullscreen } from './utils/fullscreen'
+
+const BadgesPanel = lazy(() => import('./components/Modals/BadgesPanel').then((m) => ({ default: m.BadgesPanel })))
+const RoundCompleteModal = lazy(() => import('./components/Modals/RoundCompleteModal').then((m) => ({ default: m.RoundCompleteModal })))
 
 startNet()
 setupAutoFullscreen()
@@ -60,8 +61,10 @@ export default function App() {
         <div className="pointer-events-none absolute inset-0" style={{ zoom: access.textScale }}>
           <HUD />
           <BigMap />
-          <BadgesPanel />
-          <RoundCompleteModal />
+          <Suspense fallback={null}>
+            <BadgesPanel />
+            <RoundCompleteModal />
+          </Suspense>
           <WelcomeModal />
           <OrientationGate />
         </div>

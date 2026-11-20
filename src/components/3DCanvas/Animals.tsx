@@ -6,6 +6,9 @@ import { bodies, companionPos, player } from '../../state/sceneRegistry'
 import { POND, RIVER, groundY } from '../../state/world'
 import { Block, Label, Plastic } from './primitives'
 
+/** animals beyond ~70 units (squared) from the player are hidden and not animated */
+const FAR2 = 70 * 70
+
 type Gait = 'hop' | 'waddle' | 'dash' | 'walk'
 
 /** Live state of a wandering animal, shared with its body parts so they can animate */
@@ -14,6 +17,8 @@ interface AnimalState {
   t: number
   idle: number // seconds spent standing still
   sit: boolean
+  /** too far from the player to be seen: parts skip their animation */
+  far?: boolean
 }
 const AnimalCtx = createContext<{ current: AnimalState }>({ current: { moving: false, t: 0, idle: 0, sit: false } })
 const useAnimal = () => useContext(AnimalCtx)
@@ -111,16 +116,26 @@ function Wanderer({ center, radius, speed, gait, flee, size = 0.28, children }: 
       }
     }
     g.position.set(s.x, groundY(s.x, s.z), s.z)
+    const far = (s.x - player.x) ** 2 + (s.z - player.z) ** 2 > FAR2
+    a.current.far = far
+    g.visible = !far
     bodies.set(uid, { x: s.x, z: s.z, r: size })
     const b = body.current
     const gaitY = moving && gait === 'hop' ? Math.abs(Math.sin(s.phase * 9)) * 0.28 : moving && (gait === 'walk' || gait === 'waddle') ? Math.abs(Math.sin(s.phase * 6)) * 0.03 : 0
     b.position.y = gaitY
+    const breathe = moving ? 0 : Math.sin(a.current.t * 2.2 + s.phase) * 0.018
+    b.scale.set(1 - breathe * 0.5, 1 + breathe, 1 - breathe * 0.5)
     b.rotation.z = moving && gait === 'waddle' ? Math.sin(s.phase * 12) * 0.18 : 0
     b.rotation.x = moving && gait === 'walk' ? Math.sin(s.phase * 6) * 0.05 : moving && gait === 'hop' ? Math.cos(s.phase * 9) * 0.18 : 0
   })
 
   return (
     <group ref={ref}>
+      {/* soft contact shadow so animals sit on the ground */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} renderOrder={1}>
+        <circleGeometry args={[size * 1.25, 20]} />
+        <meshBasicMaterial color="#000000" transparent opacity={0.22} depthWrite={false} />
+      </mesh>
       <group ref={body}>
         <AnimalCtx.Provider value={a}>{children}</AnimalCtx.Provider>
       </group>
@@ -134,6 +149,7 @@ function Rabbit({ color = '#f8fafc' }: { color?: string }) {
   const earR = useRef<Group>(null)
   const nose = useRef<Mesh>(null)
   useFrame(() => {
+    if (a.current.far) return
     const t = a.current.t
     const flick = Math.max(0, Math.sin(t * 1.3)) > 0.97 ? 0.5 : 0
     const run = a.current.moving ? -0.7 : 0
@@ -144,16 +160,16 @@ function Rabbit({ color = '#f8fafc' }: { color?: string }) {
   return (
     <group scale={1.1}>
       <mesh position={[0, 0.22, -0.05]} scale={[1, 0.9, 1.25]} castShadow>
-        <sphereGeometry args={[0.2, 10, 8]} />
+        <sphereGeometry args={[0.2, 18, 14]} />
         <Plastic color={color} />
       </mesh>
       <mesh position={[0, 0.42, 0.16]} castShadow>
-        <sphereGeometry args={[0.14, 10, 8]} />
+        <sphereGeometry args={[0.14, 18, 14]} />
         <Plastic color={color} />
       </mesh>
       <Eyes y={0.46} z={0.27} x={0.07} s={0.022} />
       <mesh ref={nose} position={[0, 0.41, 0.29]}>
-        <sphereGeometry args={[0.025, 6, 5]} />
+        <sphereGeometry args={[0.025, 10, 8]} />
         <meshBasicMaterial color="#f9a8d4" />
       </mesh>
       {[
@@ -172,9 +188,26 @@ function Rabbit({ color = '#f8fafc' }: { color?: string }) {
         </group>
       ))}
       <mesh position={[0, 0.24, -0.3]}>
-        <sphereGeometry args={[0.07, 8, 6]} />
+        <sphereGeometry args={[0.07, 14, 10]} />
         <Plastic color="#ffffff" />
       </mesh>
+      {/* haunches, hind feet and front paws */}
+      {[-1, 1].map((sd) => (
+        <group key={sd}>
+          <mesh position={[sd * 0.13, 0.16, -0.12]} scale={[0.6, 1, 1.2]}>
+            <sphereGeometry args={[0.11, 14, 10]} />
+            <Plastic color={color} />
+          </mesh>
+          <mesh position={[sd * 0.13, 0.03, -0.04]} scale={[0.5, 0.3, 1.4]}>
+            <sphereGeometry args={[0.09, 12, 8]} />
+            <Plastic color={color} />
+          </mesh>
+          <mesh position={[sd * 0.06, 0.04, 0.17]} scale={[0.5, 0.4, 1]}>
+            <sphereGeometry args={[0.06, 10, 8]} />
+            <Plastic color={color} />
+          </mesh>
+        </group>
+      ))}
     </group>
   )
 }
@@ -184,6 +217,7 @@ function Squirrel() {
   const tail = useRef<Group>(null)
   const head = useRef<Group>(null)
   useFrame(() => {
+    if (a.current.far) return
     const t = a.current.t
     if (tail.current) tail.current.rotation.z = Math.sin(t * (a.current.moving ? 14 : 3)) * 0.35
     if (head.current) head.current.rotation.y = a.current.moving ? 0 : Math.sin(t * 2.2) * 0.5 * Math.max(0, Math.sin(t * 0.7))
@@ -191,17 +225,17 @@ function Squirrel() {
   return (
     <group scale={1.1}>
       <mesh position={[0, 0.2, 0]} scale={[0.9, 1.1, 1]} castShadow>
-        <sphereGeometry args={[0.16, 10, 8]} />
+        <sphereGeometry args={[0.16, 18, 14]} />
         <Plastic color="#b45f2a" />
       </mesh>
       <group ref={head} position={[0, 0.4, 0.1]}>
         <mesh>
-          <sphereGeometry args={[0.11, 10, 8]} />
+          <sphereGeometry args={[0.11, 18, 14]} />
           <Plastic color="#b45f2a" />
         </mesh>
         <Eyes y={0.03} z={0.095} x={0.055} s={0.02} />
         <mesh position={[0, -0.02, 0.11]}>
-          <sphereGeometry args={[0.025, 6, 5]} />
+          <sphereGeometry args={[0.025, 10, 8]} />
           <meshBasicMaterial color="#111" />
         </mesh>
         {[-0.06, 0.06].map((x) => (
@@ -211,9 +245,25 @@ function Squirrel() {
           </mesh>
         ))}
       </group>
+      {[-1, 1].map((sd) => (
+        <group key={sd}>
+          <mesh position={[sd * 0.09, 0.03, -0.05]} scale={[0.5, 0.35, 1.3]}>
+            <sphereGeometry args={[0.07, 18, 14]} />
+            <Plastic color="#a14f20" />
+          </mesh>
+          <mesh position={[sd * 0.07, 0.05, 0.1]} scale={[0.5, 0.4, 1]}>
+            <sphereGeometry args={[0.05, 18, 14]} />
+            <Plastic color="#a14f20" />
+          </mesh>
+        </group>
+      ))}
+      <mesh position={[0, 0.17, 0.12]} scale={[0.7, 0.9, 0.5]}>
+        <sphereGeometry args={[0.1, 12, 10]} />
+        <Plastic color="#f3d9b8" />
+      </mesh>
       <group ref={tail} position={[0, 0.3, -0.18]}>
         <mesh position={[0, 0.12, -0.05]} rotation={[0.5, 0, 0]} scale={[0.7, 1.5, 0.8]} castShadow>
-          <sphereGeometry args={[0.15, 10, 8]} />
+          <sphereGeometry args={[0.15, 18, 14]} />
           <Plastic color="#c9733a" />
         </mesh>
       </group>
@@ -226,6 +276,7 @@ function Duck({ scale = 1.1 }: { scale?: number }) {
   const head = useRef<Group>(null)
   const tail = useRef<Mesh>(null)
   useFrame(() => {
+    if (a.current.far) return
     const t = a.current.t
     if (head.current) head.current.rotation.x = a.current.moving ? Math.sin(t * 10) * 0.15 : Math.max(0, Math.sin(t * 0.9)) > 0.9 ? 0.6 : 0
     if (tail.current) tail.current.rotation.z = Math.sin(t * (a.current.moving ? 14 : 5)) * 0.3
@@ -233,12 +284,12 @@ function Duck({ scale = 1.1 }: { scale?: number }) {
   return (
     <group scale={scale}>
       <mesh position={[0, 0.2, 0]} scale={[0.85, 0.75, 1.2]} castShadow>
-        <sphereGeometry args={[0.22, 10, 8]} />
+        <sphereGeometry args={[0.22, 18, 14]} />
         <Plastic color="#ffffff" />
       </mesh>
       {[-1, 1].map((sd) => (
         <mesh key={sd} position={[sd * 0.17, 0.22, -0.02]} rotation={[0.2, 0, sd * -0.2]} scale={[0.35, 0.6, 1]}>
-          <sphereGeometry args={[0.16, 8, 6]} />
+          <sphereGeometry args={[0.16, 14, 10]} />
           <Plastic color="#f1f5f9" />
         </mesh>
       ))}
@@ -246,9 +297,21 @@ function Duck({ scale = 1.1 }: { scale?: number }) {
         <coneGeometry args={[0.07, 0.16, 4]} />
         <Plastic color="#ffffff" />
       </mesh>
+      {[-1, 1].map((sd) => (
+        <group key={sd} position={[sd * 0.07, 0.02, 0.02]}>
+          <mesh position={[0, 0, 0.04]} scale={[1, 0.15, 1.3]}>
+            <coneGeometry args={[0.07, 0.1, 3]} />
+            <Plastic color="#f59e0b" />
+          </mesh>
+        </group>
+      ))}
+      <mesh position={[0, 0.3, 0.1]} scale={[0.9, 1.1, 0.8]}>
+        <sphereGeometry args={[0.12, 14, 10]} />
+        <Plastic color="#ffffff" />
+      </mesh>
       <group ref={head} position={[0, 0.38, 0.14]}>
         <mesh position={[0, 0.05, 0.03]}>
-          <sphereGeometry args={[0.12, 10, 8]} />
+          <sphereGeometry args={[0.12, 18, 14]} />
           <Plastic color="#2f855a" />
         </mesh>
         <Eyes y={0.09} z={0.12} x={0.065} s={0.02} />
@@ -267,6 +330,7 @@ function Chicken() {
   const tail = useRef<Mesh>(null)
   const wings = useRef<Group>(null)
   useFrame(() => {
+    if (a.current.far) return
     const t = a.current.t
     // idle chickens peck at the ground in quick bursts
     const peck = !a.current.moving && Math.sin(t * 1.7) > 0.2 ? Math.abs(Math.sin(t * 12)) * 0.9 : 0
@@ -277,13 +341,13 @@ function Chicken() {
   return (
     <group>
       <mesh position={[0, 0.25, 0]} scale={[0.8, 0.9, 1.1]} castShadow>
-        <sphereGeometry args={[0.22, 10, 8]} />
+        <sphereGeometry args={[0.22, 18, 14]} />
         <Plastic color="#fefce8" />
       </mesh>
       <group ref={wings}>
         {[-1, 1].map((sd) => (
           <mesh key={sd} position={[sd * 0.17, 0.27, -0.02]} scale={[0.3, 0.6, 0.9]}>
-            <sphereGeometry args={[0.16, 8, 6]} />
+            <sphereGeometry args={[0.16, 14, 10]} />
             <Plastic color="#f5f0c8" />
           </mesh>
         ))}
@@ -294,7 +358,7 @@ function Chicken() {
       </mesh>
       <group ref={head} position={[0, 0.42, 0.12]}>
         <mesh position={[0, 0.06, 0.03]}>
-          <sphereGeometry args={[0.12, 10, 8]} />
+          <sphereGeometry args={[0.12, 18, 14]} />
           <Plastic color="#fefce8" />
         </mesh>
         <Block position={[0, 0.2, 0.03]} size={[0.04, 0.1, 0.14]} color="#ef4444" />
@@ -316,6 +380,7 @@ function Cow() {
   const ear = useRef<Group>(null)
   const legs = useRef<Group[]>([])
   useFrame(() => {
+    if (a.current.far) return
     const t = a.current.t
     // idle cows lower their heads to graze
     const graze = !a.current.moving ? Math.min(1, a.current.idle / 1.5) * (0.5 + Math.sin(t * 1.2) * 0.1) : 0
@@ -372,6 +437,7 @@ function Sheep() {
   const a = useAnimal()
   const head = useRef<Group>(null)
   useFrame(() => {
+    if (a.current.far) return
     const t = a.current.t
     const graze = !a.current.moving ? Math.min(1, a.current.idle / 1.2) * 0.55 : 0
     if (head.current) head.current.rotation.x += (graze + Math.sin(t * 3) * 0.04 * graze - head.current.rotation.x) * 0.1
@@ -379,24 +445,24 @@ function Sheep() {
   return (
     <group scale={1.15}>
       <mesh position={[0, 0.55, 0]} scale={[1, 0.85, 1.25]} castShadow>
-        <sphereGeometry args={[0.36, 10, 8]} />
+        <sphereGeometry args={[0.36, 18, 14]} />
         <Plastic color="#f5f5f4" roughness={0.95} />
       </mesh>
       {[[-0.18, 0.78, 0.15], [0.18, 0.78, -0.1], [0, 0.8, -0.3], [0.2, 0.62, 0.3], [-0.2, 0.62, -0.3]].map(([x, y, z], i) => (
         <mesh key={i} position={[x, y, z]}>
-          <sphereGeometry args={[0.17, 8, 6]} />
+          <sphereGeometry args={[0.17, 14, 10]} />
           <Plastic color="#fafaf9" roughness={0.95} />
         </mesh>
       ))}
       <group ref={head} position={[0, 0.62, 0.42]}>
         <mesh position={[0, 0, 0.12]} scale={[0.85, 1, 1.1]}>
-          <sphereGeometry args={[0.15, 10, 8]} />
+          <sphereGeometry args={[0.15, 18, 14]} />
           <Plastic color="#3f3f46" />
         </mesh>
         <Eyes y={0.04} z={0.24} x={0.07} s={0.022} />
         {[-1, 1].map((sd) => (
           <mesh key={sd} position={[sd * 0.17, 0.02, 0.08]} rotation={[0, 0, sd * -0.8]} scale={[1, 0.4, 0.6]}>
-            <sphereGeometry args={[0.1, 6, 5]} />
+            <sphereGeometry args={[0.1, 10, 8]} />
             <Plastic color="#3f3f46" />
           </mesh>
         ))}
@@ -415,6 +481,7 @@ function Dog() {
   const body = useRef<Group>(null)
   const legs = useRef<Group[]>([])
   useFrame(() => {
+    if (a.current.far) return
     const t = a.current.t
     const happy = a.current.sit || a.current.moving
     if (tail.current) tail.current.rotation.y = Math.sin(t * (happy ? 18 : 3)) * (happy ? 0.7 : 0.2)
@@ -465,6 +532,7 @@ function Cat({ color = '#f97316' }: { color?: string }) {
   const legs = useRef<Group[]>([])
 
   useFrame(() => {
+    if (a.current.far) return
     const t = a.current.t
     const happy = a.current.sit || a.current.moving
     if (tail.current) {
@@ -610,13 +678,14 @@ function Crab() {
   const a = useAnimal()
   const claws = useRef<Group>(null)
   useFrame(() => {
+    if (a.current.far) return
     const t = a.current.t
     if (claws.current) claws.current.rotation.x = Math.sin(t * (a.current.moving ? 14 : 3)) * 0.25
   })
   return (
     <group scale={0.9}>
       <mesh position={[0, 0.12, 0]} scale={[1.3, 0.55, 1]} castShadow>
-        <sphereGeometry args={[0.16, 10, 8]} />
+        <sphereGeometry args={[0.16, 18, 14]} />
         <Plastic color="#ef6a4a" />
       </mesh>
       <Eyes y={0.24} z={0.1} x={0.07} s={0.03} />
@@ -636,19 +705,20 @@ function Seagull() {
   const a = useAnimal()
   const head = useRef<Group>(null)
   useFrame(() => {
+    if (a.current.far) return
     const t = a.current.t
     if (head.current) head.current.rotation.x = a.current.moving ? Math.sin(t * 8) * 0.12 : Math.max(0, Math.sin(t * 1.1)) > 0.92 ? 0.7 : 0
   })
   return (
     <group scale={1.1}>
       <mesh position={[0, 0.3, 0]} scale={[0.8, 0.8, 1.3]} castShadow>
-        <sphereGeometry args={[0.2, 10, 8]} />
+        <sphereGeometry args={[0.2, 18, 14]} />
         <Plastic color="#fafafa" />
       </mesh>
       <Block position={[0, 0.36, -0.2]} size={[0.3, 0.06, 0.3]} color="#94a3b8" />
       <group ref={head} position={[0, 0.5, 0.18]}>
         <mesh>
-          <sphereGeometry args={[0.1, 8, 6]} />
+          <sphereGeometry args={[0.1, 14, 10]} />
           <Plastic color="#ffffff" />
         </mesh>
         <Eyes y={0.02} z={0.085} x={0.05} s={0.018} />
@@ -680,14 +750,30 @@ function FlyingGull({ cx, cz, r, h, speed, phase }: { cx: number; cz: number; r:
   return (
     <group ref={ref}>
       <mesh scale={[0.5, 0.4, 1.3]}>
-        <sphereGeometry args={[0.2, 8, 6]} />
+        <sphereGeometry args={[0.2, 14, 10]} />
         <meshStandardMaterial color="#ffffff" />
+      </mesh>
+      <mesh position={[0, 0.02, 0.28]} scale={[0.4, 0.4, 0.8]}>
+        <sphereGeometry args={[0.12, 12, 10]} />
+        <meshStandardMaterial color="#ffffff" />
+      </mesh>
+      <mesh position={[0, 0.02, 0.4]} rotation={[Math.PI / 2, 0, 0]}>
+        <coneGeometry args={[0.025, 0.1, 6]} />
+        <meshStandardMaterial color="#f59e0b" />
+      </mesh>
+      <mesh position={[0, 0, -0.32]} rotation={[-Math.PI / 2, 0, 0]} scale={[1, 1, 0.2]}>
+        <coneGeometry args={[0.1, 0.25, 4]} />
+        <meshStandardMaterial color="#e2e8f0" />
       </mesh>
       {[wL, wR].map((w, i) => (
         <group key={i} ref={w}>
-          <mesh position={[i ? 0.4 : -0.4, 0, 0]}>
-            <boxGeometry args={[0.8, 0.03, 0.28]} />
-            <meshStandardMaterial color="#f1f5f9" side={2} />
+          <mesh position={[i ? 0.3 : -0.3, 0, 0]} scale={[1, 0.06, 0.45]}>
+            <sphereGeometry args={[0.32, 14, 8]} />
+            <meshStandardMaterial color="#f8fafc" side={2} />
+          </mesh>
+          <mesh position={[i ? 0.62 : -0.62, 0, 0.03]} scale={[1, 0.05, 0.3]}>
+            <sphereGeometry args={[0.2, 12, 8]} />
+            <meshStandardMaterial color="#334155" side={2} />
           </mesh>
         </group>
       ))}
@@ -728,7 +814,7 @@ function JumpingFish({ x }: { x: number }) {
   return (
     <group ref={ref} rotation={[0, 0, 0]}>
       <mesh scale={[1.4, 0.7, 0.45]}>
-        <sphereGeometry args={[0.2, 10, 8]} />
+        <sphereGeometry args={[0.2, 18, 14]} />
         <Plastic color="#fb923c" />
       </mesh>
       <mesh position={[-0.3, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
@@ -748,16 +834,30 @@ function Butterfly({ cx, cz, color, phase }: { cx: number; cz: number; color: st
     const t = clock.elapsedTime + phase
     if (ref.current) ref.current.position.set(cx + Math.sin(t * 0.7) * 2, 1.2 + Math.sin(t * 2) * 0.3, cz + Math.cos(t * 0.9) * 1.5)
     const f = Math.sin(t * 20) * 0.9
-    if (wingL.current) wingL.current.rotation.z = f
+    if (wingL.current) wingL.current.rotation.z = -f
     if (wingR.current) wingR.current.rotation.z = -f
   })
   return (
     <group ref={ref}>
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <capsuleGeometry args={[0.012, 0.1, 4, 8]} />
+        <meshStandardMaterial color="#1f2937" />
+      </mesh>
+      {[-1, 1].map((sd) => (
+        <mesh key={sd} position={[sd * 0.012, 0.01, 0.07]} rotation={[0.6, 0, sd * -0.4]}>
+          <cylinderGeometry args={[0.002, 0.002, 0.08, 4]} />
+          <meshBasicMaterial color="#1f2937" />
+        </mesh>
+      ))}
       {[wingL, wingR].map((w, i) => (
-        <group key={i} ref={w}>
-          <mesh position={[i ? 0.09 : -0.09, 0, 0]}>
-            <boxGeometry args={[0.16, 0.01, 0.14]} />
-            <meshStandardMaterial color={color} side={2} />
+        <group key={i} ref={w} scale={[i ? 1 : -1, 1, 1]}>
+          <mesh position={[0.075, 0, 0.04]} scale={[1, 0.08, 0.9]}>
+            <sphereGeometry args={[0.085, 14, 10]} />
+            <meshStandardMaterial color={color} side={2} roughness={0.6} />
+          </mesh>
+          <mesh position={[0.06, 0, -0.045]} scale={[1, 0.08, 0.75]}>
+            <sphereGeometry args={[0.06, 12, 8]} />
+            <meshStandardMaterial color={color} side={2} roughness={0.6} emissive={color} emissiveIntensity={0.12} />
           </mesh>
         </group>
       ))}

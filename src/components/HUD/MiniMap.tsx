@@ -14,7 +14,7 @@ import {
   HOUSES,
   PATHS,
   POND,
-  RECYCLING_CENTER,
+  ECO_HUB,
   RIVER,
   ROAD_X,
   ROADS_EW,
@@ -68,7 +68,7 @@ const MapStatic = memo(function MapStatic({ dot }: { dot: number }) {
         {R(SCHOOL_BUILDING, '#2563eb')}
         {R(SCHOOL_FIELD, '#4fb847')}
         {[SCHOOL_S, SCHOOL_W, SCHOOL_E, ...SCHOOL_WALLS].map((r, i) => R(r, '#2563eb', `sc${i}`))}
-        {R(RECYCLING_CENTER, '#047857')}
+        {R(ECO_HUB, "#047857")}
         {R(BARN, '#dc2626')}
         {/* bins */}
         {BIN_SLOTS.map((b) => (

@@ -14,17 +14,17 @@ export function Toasts() {
   const toasts = useGame((s) => s.toasts)
   const dismiss = useGame((s) => s.dismissToast)
   return (
-    <div className="pointer-events-none flex w-[min(88vw,19rem)] sm:w-80 flex-col items-center gap-1.5">
+    <div className="pointer-events-none flex w-[min(52vw,15rem)] sm:w-64 flex-col items-end gap-1">
       <AnimatePresence>
         {toasts.map((t) => (
           <motion.button
             key={t.id}
             layout
-            initial={{ opacity: 0, y: -16, scale: 0.92 }}
-            animate={{ opacity: 1, y: 0, scale: t.kind === 'badge' ? [1, 1.05, 1] : 1 }}
-            exit={{ opacity: 0, scale: 0.92 }}
+            initial={{ opacity: 0, x: 48 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 48 }}
             onClick={() => dismiss(t.id)}
-            className={`glass pointer-events-auto flex w-full items-start gap-2.5 rounded-xl px-3 py-1.5 text-left shadow-lg ${STYLES[t.kind]}`}
+            className={`glass pointer-events-auto flex w-full items-start gap-2.5 rounded-lg px-2.5 py-1 text-left shadow-lg ${STYLES[t.kind]}`}
           >
             <span className={`leading-none shrink-0 ${t.kind === 'badge' ? 'text-xl' : 'text-lg'}`}>{t.emoji}</span>
             <span className="min-w-0 flex-1">

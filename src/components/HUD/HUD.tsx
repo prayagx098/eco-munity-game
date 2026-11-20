@@ -1,20 +1,24 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { useGame } from '../../state/gameStore'
 import { StatsBar } from './StatsBar'
 import { MiniMap } from './MiniMap'
 import { TaskPopup } from './TaskList'
 import { Toasts } from './Toasts'
+import { StoryBook, StoryDialog, StoryTracker } from './Story'
 import { HelpPopup } from './HelpCard'
-import { ShopModal } from '../Modals/ShopModal'
-import { GoodsModal } from '../Modals/StoreModals'
-import { QuizModal } from '../Modals/QuizModal'
-import { QuizBowlModal } from '../Modals/QuizBowlModal'
-import { BinModal, InventoryModal } from '../Modals/MakerModals'
 import { ChatPanel } from './ChatPanel'
 import { Captions, InteractPrompt, ZoneBanner } from './Prompts'
 import { StatusPill, Dock } from './Status'
 import { TouchControls } from './TouchControls'
-import { SettingsPanel } from '../Modals/SettingsPanel'
+
+// Modals are only needed once opened, so they load in separate chunks after the first paint
+const ShopModal = lazy(() => import('../Modals/ShopModal').then((m) => ({ default: m.ShopModal })))
+const GoodsModal = lazy(() => import('../Modals/StoreModals').then((m) => ({ default: m.GoodsModal })))
+const QuizModal = lazy(() => import('../Modals/QuizModal').then((m) => ({ default: m.QuizModal })))
+const QuizBowlModal = lazy(() => import('../Modals/QuizBowlModal').then((m) => ({ default: m.QuizBowlModal })))
+const InventoryModal = lazy(() => import('../Modals/MakerModals').then((m) => ({ default: m.InventoryModal })))
+const BinModal = lazy(() => import('../Modals/MakerModals').then((m) => ({ default: m.BinModal })))
+const SettingsPanel = lazy(() => import('../Modals/SettingsPanel').then((m) => ({ default: m.SettingsPanel })))
 
 /**
  * The 2D overlay: a slim stats card, a few chips, the map, and small icon buttons.
@@ -32,6 +36,7 @@ export function HUD() {
       {/* Top-left: profile + stats */}
       <div className="pointer-events-auto absolute top-2 sm:top-3 left-2 sm:left-3 flex flex-col gap-1.5 sm:gap-2 z-20">
         <StatsBar />
+        <StoryTracker />
         <Captions />
       </div>
 
@@ -39,6 +44,10 @@ export function HUD() {
       <div className="pointer-events-none absolute top-2 sm:top-3 left-1/2 flex -translate-x-1/2 flex-col items-center gap-1.5 sm:gap-2 z-10">
         <StatusPill />
         <ZoneBanner />
+      </div>
+
+      {/* Right side feed (like a kill feed): messages stack at the edge and keep the centre clear */}
+      <div className="pointer-events-none absolute right-2 sm:right-3 top-[34%] sm:top-[38%] z-10">
         <Toasts />
       </div>
 
@@ -64,6 +73,9 @@ export function HUD() {
       <TouchControls />
 
       <TaskPopup />
+      <StoryBook />
+      <StoryDialog />
+      <Suspense fallback={null}>
       <ShopModal />
       <GoodsModal />
       <InventoryModal />
@@ -72,6 +84,7 @@ export function HUD() {
       <QuizBowlModal />
       <HelpPopup />
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      </Suspense>
 
       {paused && (
         <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-slate-950/40">

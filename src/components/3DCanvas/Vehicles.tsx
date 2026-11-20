@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
+import * as THREE from 'three'
 import type { Group } from 'three'
 import { bodies, npcPositions, player, remotePlayers } from '../../state/sceneRegistry'
 import { STANDS, VEHICLES, ROAD_X, WORLD_HALF, JUNCTIONS, groundY, lightState, type VehicleEntity, type VehicleKind } from '../../state/world'
@@ -926,7 +927,9 @@ function ElectricBusBody({
 function Car({ c }: { c: CarSpec }) {
   const g = useRef<Group>(null)
   const wheels = useRef<Group[]>([])
-  const st = useRef({ p: c.pos, v: c.speed, odo: 0 })
+  const st = useRef({ p: c.pos, v: c.speed, odo: 0, pv: c.speed, h: NaN, pitch: 0, brake: 0 })
+  const tilt = useRef<Group>(null)
+  const brakeMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#7f1d1d', emissive: '#ff1a1a', emissiveIntensity: 0.5 }), [])
   const alongZ = c.axis === 'z'
   // right-hand traffic: lane offset from road centre line
   const lat = alongZ ? ROAD_X - c.lane * 1.25 : (c.road ?? 0) + c.lane * 1.25
@@ -981,8 +984,21 @@ function Car({ c }: { c: CarSpec }) {
     const z = alongZ ? s.p : lat
     if (g.current) {
       g.current.position.set(x, 0.06 + groundY(x, z), z)
-      g.current.rotation.y = alongZ ? (c.lane > 0 ? 0 : Math.PI) : c.lane > 0 ? Math.PI / 2 : -Math.PI / 2
+      const th = alongZ ? (c.lane > 0 ? 0 : Math.PI) : c.lane > 0 ? Math.PI / 2 : -Math.PI / 2
+      if (Number.isNaN(s.h)) s.h = th
+      s.h += Math.atan2(Math.sin(th - s.h), Math.cos(th - s.h)) * Math.min(1, dt * 6)
+      g.current.rotation.y = s.h
     }
+    // suspension: nose dives when braking, squats when pulling away, with a light road bob at speed
+    const accel = (s.v - s.pv) / Math.max(dt, 1e-3)
+    s.pv = s.v
+    s.pitch += (Math.max(-0.045, Math.min(0.045, -accel * 0.02)) - s.pitch) * Math.min(1, dt * 8)
+    if (tilt.current) {
+      tilt.current.rotation.x = s.pitch
+      tilt.current.position.y = Math.sin(s.odo * 7) * 0.006 * Math.min(1, s.v / 3)
+    }
+    s.brake += ((blocked || accel < -0.4 ? 1 : 0) - s.brake) * Math.min(1, dt * 12)
+    brakeMat.emissiveIntensity = 0.5 + s.brake * 3
 
     const fwdX = alongZ ? 0 : c.lane
     const fwdZ = alongZ ? c.lane : 0
@@ -999,8 +1015,11 @@ function Car({ c }: { c: CarSpec }) {
   }
   const night = useGame((s) => isNight(s.clock))
 
+  const bw = c.kind === 'bus' ? 0.9 : 0.55
+  const by = c.kind === 'bus' ? 0.8 : 0.58
   return (
     <group ref={g}>
+      <group ref={tilt}>
       {c.kind === 'bus' ? (
         <ElectricBusBody color={c.color} len={len} night={night} wheelRef={setW} />
       ) : c.kind === 'taxi' ? (
@@ -1008,6 +1027,12 @@ function Car({ c }: { c: CarSpec }) {
       ) : (
         <ElectricCarBody color={c.color} len={len} night={night} wheelRef={setW} />
       )}
+      {[-1, 1].map((sd) => (
+        <mesh key={sd} position={[sd * bw, by, -len / 2 - 0.045]} material={brakeMat}>
+          <boxGeometry args={[0.22, 0.08, 0.04]} />
+        </mesh>
+      ))}
+      </group>
       <Near getPos={() => (alongZ ? [lat, st.current.p] : [st.current.p, lat])} r={12}>
         <Label position={[0, c.kind === 'bus' ? 3.2 : 2.3, 0]}>
           <div className="whitespace-nowrap rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800 shadow ring-1 ring-white">

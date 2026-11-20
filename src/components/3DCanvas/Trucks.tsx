@@ -12,7 +12,7 @@ import { Wheel } from './Vehicles'
 type Kind = 'recycle' | 'compost' | 'trash'
 const S = 0.85 // the whole truck is drawn at this scale
 // the heading each truck has when it arrives home (the reverse of its first road segment), so it never snaps when a job ends
-const IDLE_HEADING: Record<Kind, number> = { recycle: Math.PI, compost: Math.PI / 2, trash: Math.PI }
+const IDLE_HEADING: Record<Kind, number> = { recycle: Math.PI, compost: Math.PI, trash: Math.PI }
 const PIVOT = new THREE.Vector3(0.95, 1.3, -0.4) // crane base on the truck's right-hand side (truck units)
 const BOOM_Y = 3.0
 const ease = (t: number) => {
@@ -131,6 +131,9 @@ function Truck({ kind }: { kind: Kind }) {
     blockedTimer: number
     steer: number
     bounce: number
+    px?: number
+    pz?: number
+    puffAt?: number
   }>({
     id: '',
     t: 0,
@@ -316,6 +319,14 @@ function Truck({ kind }: { kind: Kind }) {
       g.rotation.set(chassisPitch, r.heading, chassisRoll)
     }
     for (const w of wheels.current) if (w) w.rotation.x = r.odo / 0.35
+    // diesel-ish puff from the exhaust stack while moving
+    if (phase !== 'idle' && Math.hypot(tx - (r.px ?? tx), tz - (r.pz ?? tz)) > 0.01 && performance.now() - (r.puffAt ?? 0) > 260) {
+      r.puffAt = performance.now()
+      const w = toWorld(r.x, r.z, r.heading, -0.78, 0.95)
+      emitBurst({ x: w.x, z: w.z, y: 1.7, color: '#cbd5e1', n: 1, spread: 0.15, size: 0.07 })
+    }
+    r.px = tx
+    r.pz = tz
     frontSteer.current.forEach((fg) => {
       if (fg) fg.rotation.y = r.steer
     })
@@ -448,6 +459,36 @@ function Truck({ kind }: { kind: Kind }) {
             <boxGeometry args={[0.28, 0.16, 0.05]} />
             <primitive object={sharedMaterials.lampGlow} attach="material" />
           </mesh>
+        ))}
+        {/* realism: bumpers, grille, wheel arches, mirrors, tail lights, exhaust and a hazard stripe */}
+        <Block position={[0, 0.42, 2.2]} size={[1.7, 0.2, 0.18]} color="#1f2937" />
+        <Block position={[0, 0.78, 2.14]} size={[1.0, 0.22, 0.04]} color="#0f172a" cast={false} />
+        <Block position={[0, 0.42, -2.18]} size={[1.7, 0.2, 0.14]} color="#1f2937" />
+        {[0.82, -0.82].flatMap((x) => [1.4, -0.6, -1.6].map((z) => (
+          <mesh key={`${x}${z}`} position={[x * 1.03, 0.62, z]} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.46, 0.46, 0.06, 20, 1, false, 0, Math.PI]} />
+            <meshStandardMaterial color="#1e293b" roughness={0.7} />
+          </mesh>
+        )))}
+        {[-0.95, 0.95].map((x) => (
+          <group key={x} position={[x, 1.55, 2.0]}>
+            <Block position={[0, 0, 0]} size={[0.06, 0.28, 0.2]} color="#0f172a" />
+            <Block position={[x > 0 ? 0.1 : -0.1, -0.02, 0]} size={[0.14, 0.04, 0.04]} color="#0f172a" />
+          </group>
+        ))}
+        {[-0.65, 0.65].map((x) => (
+          <mesh key={x} position={[x, 0.72, -2.2]}>
+            <boxGeometry args={[0.3, 0.14, 0.04]} />
+            <meshStandardMaterial color="#dc2626" emissive="#ef4444" emissiveIntensity={0.9} />
+          </mesh>
+        ))}
+        <mesh position={[-0.78, 1.55, 0.95]}>
+          <cylinderGeometry args={[0.05, 0.05, 1.1, 8]} />
+          <meshStandardMaterial color="#94a3b8" metalness={0.8} roughness={0.3} />
+        </mesh>
+        <Block position={[0, 0.9, 1.5]} size={[1.62, 0.1, 1.22]} color={bodyColor} cast={false} />
+        {[1, -1].map((sd) => (
+          <Block key={sd} position={[sd * 0.805, 0.9, -0.2]} size={[0.02, 0.2, 2.2]} color="#facc15" cast={false} />
         ))}
       </group>
     </group>

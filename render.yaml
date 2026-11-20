@@ -8,3 +8,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # secret: paste the Atlas connection string in the Render dashboard (never commit it)
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB
+        value: ecomunity

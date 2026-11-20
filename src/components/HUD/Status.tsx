@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useGame, clockLabel, dayPhase, isNight, getTownEcoStatus } from '../../state/gameStore'
 import { useUI } from '../../state/ui'
+import { useStory } from '../../state/story'
 import { useView, VIEW_LABELS } from '../../state/viewMode'
 import { Icon, type IconName } from '../UI/Icons'
 import { isFullscreen, toggleFullscreen } from '../../utils/fullscreen'
@@ -112,9 +113,13 @@ export function Dock({ onSettings, settingsOpen }: { onSettings: () => void; set
   const invOpen = useGame((s) => s.invOpen)
   const setInv = useGame((s) => s.setInv)
   const done = tasks.filter((t) => t.progress >= t.target).length
+  const bookOpen = useStory((s) => s.bookOpen)
+  const setBook = useStory((s) => s.setBook)
+  const sparks = useStory((s) => s.completed.length)
   return (
     <div className="glass pointer-events-auto grid grid-cols-4 gap-0.5 p-0.5 sm:p-1 sm:flex sm:items-center sm:gap-0.5 shadow-lg">
       <DockButton icon="tasks" label="Tasks (T)" onClick={() => setTasks()} active={tasksOpen} badge={`${done}/${tasks.length}`} />
+      <DockButton icon="book" label="Story book (J)" onClick={() => setBook()} active={bookOpen} badge={`${sparks}/7`} />
       <DockButton icon="bag" label="Backpack (I)" onClick={() => setInv()} active={invOpen} badge={coins} />
       <DockButton icon="award" label="Badges (B)" onClick={() => toggleBadges(true)} badge={badges || undefined} />
       <DockButton icon="camera" label={`Camera: ${VIEW_LABELS[mode].name} (V)`} onClick={cycle} />

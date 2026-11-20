@@ -1,10 +1,11 @@
 import { useMemo, useRef } from 'react'
+import { InstancedTrees } from './InstancedTrees'
+import { InstancedFlowers } from './InstancedFlowers'
 import { useFrame } from '@react-three/fiber'
 import type { Group, Mesh } from 'three'
-import { Block, Label, LegoPine, LegoTree, Marker, Near, Plastic, Sign3D, sharedMaterials, type V3 } from './primitives'
+import { Block, Label, Marker, Near, Plastic, Sign3D, sharedMaterials, type V3 } from './primitives'
 import { useGame, getTownEcoStatus } from '../../state/gameStore'
 import { env } from '../../state/sceneRegistry'
-import { useSway } from './Nature'
 import {
   BARN,
   BENCHES,
@@ -285,14 +286,7 @@ export function Farm() {
 /* ------------------------------------------------------------------ */
 
 export function Trees() {
-  return (
-    <group>
-      {TREES.map(([x, z, s], i) => {
-        const pine = (x > 28 && z < -24) || z > 38 || (x < -2 && z < -26)
-        return pine ? <LegoPine key={i} position={[x, 0, z]} scale={s} tone={i} /> : <LegoTree key={i} position={[x, 0, z]} scale={s} tone={i} />
-      })}
-    </group>
-  )
+  return <InstancedTrees trees={TREES} />
 }
 
 export function Benches() {
@@ -311,24 +305,6 @@ export function Benches() {
   )
 }
 
-function Flower({ x, z, h, c, phase }: { x: number; z: number; h: number; c: string; phase: number }) {
-  const ref = useSway(phase, 2.5)
-  return (
-    <group position={[x, 0.42, z]}>
-      <group ref={ref}>
-        <mesh position={[0, h / 2, 0]}>
-          <cylinderGeometry args={[0.025, 0.025, h, 5]} />
-          <Plastic color="#2f9a3a" />
-        </mesh>
-        <mesh position={[0, h, 0]}>
-          <sphereGeometry args={[0.13, 8, 6]} />
-          <Plastic color={c} />
-        </mesh>
-      </group>
-    </group>
-  )
-}
-
 function FlowerBed({ x, z, w, d, seed }: { x: number; z: number; w: number; d: number; seed: number }) {
   const stats = useGame((s) => s.stats)
   const eco = getTownEcoStatus(stats)
@@ -343,9 +319,7 @@ function FlowerBed({ x, z, w, d, seed }: { x: number; z: number; w: number; d: n
     <group position={[x, 0, z]}>
       <Block position={[0, 0.2, 0]} size={[w, 0.4, d]} color="#a4643a" tex="wood" texScale={1.5} />
       <Block position={[0, 0.41, 0]} size={[w - 0.3, 0.04, d - 0.3]} color="#5b3a22" cast={false} tex="soil" texScale={1.5} />
-      {flowers.map((f, i) => (
-        <Flower key={i} x={f.x} z={f.z} h={f.h} c={f.c} phase={x + z + i} />
-      ))}
+      <InstancedFlowers flowers={flowers} phase={x + z} />
     </group>
   )
 }

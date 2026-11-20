@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useGame, isNight } from '../../state/gameStore'
@@ -266,10 +266,70 @@ export function CloudShadows() {
 /* Birds flying over in V formation during the day                      */
 /* ------------------------------------------------------------------ */
 
+/* shared bird parts so a whole flock costs a handful of geometries */
+const BIRD_BODY = new THREE.SphereGeometry(0.1, 14, 10)
+const BIRD_HEAD = new THREE.SphereGeometry(0.06, 12, 9)
+const BIRD_BEAK = new THREE.ConeGeometry(0.022, 0.07, 6)
+const BIRD_TAIL = new THREE.ConeGeometry(0.07, 0.24, 4)
+const BIRD_WING_IN = new THREE.BoxGeometry(0.3, 0.012, 0.2)
+const BIRD_WING_OUT = new THREE.BoxGeometry(0.28, 0.01, 0.15)
+BIRD_BEAK.rotateX(Math.PI / 2)
+BIRD_TAIL.rotateX(-Math.PI / 2)
+BIRD_TAIL.scale(1, 0.15, 1)
+BIRD_WING_IN.translate(0.15, 0, 0)
+BIRD_WING_OUT.translate(0.14, 0, 0)
+const BIRD_COLORS = [
+  { body: '#f8fafc', wing: '#e2e8f0', tip: '#475569' },
+  { body: '#64748b', wing: '#94a3b8', tip: '#1e293b' },
+  { body: '#92613a', wing: '#b4784a', tip: '#4a2e18' },
+]
+
+function Bird({ i, birdRef }: { i: number; birdRef: (b: { root: THREE.Group; wl: THREE.Group; wr: THREE.Group; ol: THREE.Group; or: THREE.Group } | null) => void }) {
+  const col = BIRD_COLORS[i % BIRD_COLORS.length]
+  const root = useRef<THREE.Group>(null)
+  const wl = useRef<THREE.Group>(null)
+  const wr = useRef<THREE.Group>(null)
+  const ol = useRef<THREE.Group>(null)
+  const or = useRef<THREE.Group>(null)
+  useLayoutEffect(() => {
+    if (root.current && wl.current && wr.current && ol.current && or.current) birdRef({ root: root.current, wl: wl.current, wr: wr.current, ol: ol.current, or: or.current })
+  })
+  const wing = (side: 1 | -1, outer: React.RefObject<THREE.Group | null>, inner: React.RefObject<THREE.Group | null>) => (
+    <group ref={inner} scale={[side, 1, 1]} position={[side * 0.07, 0.02, 0]}>
+      <mesh geometry={BIRD_WING_IN}>
+        <meshLambertMaterial color={col.wing} side={THREE.DoubleSide} />
+      </mesh>
+      <group ref={outer} position={[0.3, 0, 0]}>
+        <mesh geometry={BIRD_WING_OUT}>
+          <meshLambertMaterial color={col.tip} side={THREE.DoubleSide} />
+        </mesh>
+      </group>
+    </group>
+  )
+  return (
+    <group ref={root}>
+      <mesh geometry={BIRD_BODY} scale={[0.85, 0.8, 1.7]}>
+        <meshLambertMaterial color={col.body} />
+      </mesh>
+      <mesh geometry={BIRD_HEAD} position={[0, 0.03, 0.2]}>
+        <meshLambertMaterial color={col.body} />
+      </mesh>
+      <mesh geometry={BIRD_BEAK} position={[0, 0.025, 0.27]}>
+        <meshLambertMaterial color="#f59e0b" />
+      </mesh>
+      <mesh geometry={BIRD_TAIL} position={[0, 0, -0.27]}>
+        <meshLambertMaterial color={col.tip} />
+      </mesh>
+      {wing(1, or, wr)}
+      {wing(-1, ol, wl)}
+    </group>
+  )
+}
+
 function Flock({ seed }: { seed: number }) {
   const group = useRef<THREE.Group>(null)
-  const wings = useRef<THREE.Group[]>([])
-  const st = useRef({ t: seed * 7, x: 0, z: 0, dx: 1, dz: 0, active: false })
+  const birds = useRef<({ root: THREE.Group; wl: THREE.Group; wr: THREE.Group; ol: THREE.Group; or: THREE.Group } | null)[]>([])
+  const st = useRef({ t: seed * 7, x: 0, z: 0, heading: 0, turn: 0, active: false, age: 0 })
   useFrame(({ clock }, rawDt) => {
     const g = group.current
     if (!g) return
@@ -279,52 +339,62 @@ function Flock({ seed }: { seed: number }) {
     const ok = env.night < 0.5 && env.rain < 0.3
     if (!s.active && s.t <= 0 && ok) {
       const a = Math.random() * Math.PI * 2
-      s.dx = Math.cos(a)
-      s.dz = Math.sin(a)
-      s.x = player.x - s.dx * 40 + (Math.random() - 0.5) * 10
-      s.z = player.z - s.dz * 40 + (Math.random() - 0.5) * 10
+      s.heading = Math.atan2(Math.cos(a), Math.sin(a))
+      s.x = player.x - Math.cos(a) * 40 + (Math.random() - 0.5) * 10
+      s.z = player.z - Math.sin(a) * 40 + (Math.random() - 0.5) * 10
       s.active = true
+      s.age = 0
     }
     g.visible = s.active
     if (!s.active) return
-    s.x += s.dx * 6 * dt
-    s.z += s.dz * 6 * dt
-    g.position.set(s.x, 9 + Math.sin(clock.elapsedTime * 0.8 + seed) * 0.5, s.z)
-    g.rotation.y = Math.atan2(s.dx, s.dz)
-    wings.current.forEach((w, i) => (w.rotation.z = Math.sin(clock.elapsedTime * 10 + i) * 0.7))
+    const T = clock.elapsedTime
+    s.age += dt
+    // the flock drifts in long gentle curves instead of flying dead straight
+    const prevTurn = s.turn
+    s.turn += ((Math.sin(T * 0.23 + seed * 3.1) * 0.22 - s.turn) * Math.min(1, dt * 1.2))
+    s.heading += s.turn * dt
+    s.x += Math.sin(s.heading) * 6 * dt
+    s.z += Math.cos(s.heading) * 6 * dt
+    g.position.set(s.x, 9 + Math.sin(T * 0.6 + seed) * 0.6, s.z)
+    g.rotation.y = s.heading
+    const bank = -s.turn * 1.6 + (s.turn - prevTurn) * 0
+    birds.current.forEach((b, i) => {
+      if (!b) return
+      const [ox, oz] = OFFSETS[i]
+      // each bird has its own rhythm: bursts of flapping followed by glides
+      const flapSpeed = 9 + (i % 3) * 0.8
+      const burst = Math.max(0, Math.min(1, Math.sin(T * 0.7 + i * 1.9 + seed) * 1.6 + 0.9))
+      const ph = T * flapSpeed + i * 0.7
+      const flap = Math.sin(ph) * (0.15 + 0.65 * burst)
+      b.root.position.set(ox * 1.1 + Math.sin(T * 0.9 + i) * 0.06, Math.sin(ph) * 0.04 * burst + Math.sin(T * 0.5 + i * 2) * 0.12, oz * 1.1)
+      b.root.rotation.z = bank
+      b.root.rotation.x = Math.cos(ph) * 0.06 * burst
+      b.wr.rotation.z = flap
+      b.wl.rotation.z = flap
+      b.or.rotation.z = flap * 0.7 + Math.sin(ph - 0.9) * 0.25 * burst
+      b.ol.rotation.z = flap * 0.7 + Math.sin(ph - 0.9) * 0.25 * burst
+    })
     if (Math.hypot(s.x - player.x, s.z - player.z) > 48) {
       s.active = false
       s.t = 8 + Math.random() * 20
     }
   })
-  const offsets: [number, number][] = [
-    [0, 0],
-    [-1, -1],
-    [1, -1],
-    [-2, -2],
-    [2, -2],
-  ]
   return (
     <group ref={group} visible={false}>
-      {offsets.map(([x, z], i) => (
-        <group key={i} position={[x * 0.9, 0, z * 0.9]}>
-          <mesh>
-            <boxGeometry args={[0.12, 0.1, 0.35]} />
-            <meshLambertMaterial color="#334155" />
-          </mesh>
-          {[-1, 1].map((side) => (
-            <group key={side} ref={(el) => void (el && (wings.current[i * 2 + (side + 1) / 2] = el))} scale={[side, 1, 1]}>
-              <mesh position={[0.25, 0, 0]}>
-                <boxGeometry args={[0.45, 0.02, 0.18]} />
-                <meshLambertMaterial color="#475569" />
-              </mesh>
-            </group>
-          ))}
-        </group>
+      {OFFSETS.map((_, i) => (
+        <Bird key={i} i={i + seed} birdRef={(b) => void (birds.current[i] = b)} />
       ))}
     </group>
   )
 }
+
+const OFFSETS: [number, number][] = [
+  [0, 0],
+  [-1, -1],
+  [1, -1.1],
+  [-2, -2.1],
+  [2, -2],
+]
 
 export function Birds() {
   const { birds } = usePreset()

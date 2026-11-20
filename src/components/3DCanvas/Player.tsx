@@ -8,7 +8,8 @@ import { act, bodies, dress, emitBurst, env, keys, npcPositions, player, remoteP
 import { useSettings } from '../../state/settings'
 import { footstepsOn, sfx } from '../../audio/audio'
 import { emitPuff } from './Weather'
-import { VEHICLES, collides, groundY, zoneAt } from '../../state/world'
+import { useStory } from '../../state/story'
+import { VEHICLES, airborne, collides, groundY, zoneAt } from '../../state/world'
 import { Minifig, SpeechBubble, type MinifigAnim } from './NPCs'
 import { TrashShape } from './TrashItems'
 import { VehicleMesh } from './Vehicles'
@@ -69,7 +70,7 @@ export function Player() {
     const dt = Math.min(rawDt, 0.05)
     const s = useGame.getState()
     const busy = !!act.kind
-    const canMove = s.screen === 'playing' && !s.paused && !s.bigMap && !s.roundComplete && !s.chatWith && !s.shopOpen && !s.goodsCounter && !s.invOpen && !s.binOpen && s.quiz === null && !busy
+    const canMove = s.screen === 'playing' && !s.paused && !s.bigMap && !s.roundComplete && !s.chatWith && !s.shopOpen && !s.goodsCounter && !s.invOpen && !s.binOpen && s.quiz === null && !busy && !useStory.getState().dialog
     const turnTo = (tx: number, tz: number, rate: number) => {
       const diff = Math.atan2(Math.sin(Math.atan2(tx - player.x, tz - player.z) - player.heading), Math.cos(Math.atan2(tx - player.x, tz - player.z) - player.heading))
       player.heading += diff * Math.min(1, dt * rate)
@@ -237,10 +238,10 @@ export function Player() {
     if (veh.current) veh.current.visible = !!player.vehicle
 
     // --- Jumping & Hopping Physics ---
-    const wantsJump = keys.has('jump') && canMove
+    const wantsJump = keys.has('jump') && canMove && !player.vehicle
     if (wantsJump && isGrounded.current) {
       isGrounded.current = false
-      jumpVy.current = player.vehicle ? 4.2 : 5.4
+      jumpVy.current = 5.8
       jumpY.current = 0.03
       sfx('jump')
       emitPuff(player.x, player.z, false)
@@ -248,7 +249,7 @@ export function Player() {
     }
 
     if (!isGrounded.current || jumpY.current > 0) {
-      const gravity = player.vehicle ? 18.5 : 17.0
+      const gravity = 17.0
       jumpVy.current -= gravity * dt
       jumpY.current += jumpVy.current * dt
       if (jumpY.current <= 0) {
@@ -263,6 +264,7 @@ export function Player() {
     squash.current += (1 - squash.current) * Math.min(1, dt * 15)
     anim.current.jump = isGrounded.current ? 0 : Math.min(1, jumpY.current / 0.7)
 
+    airborne.h = player.vehicle ? 0 : jumpY.current
     const gy = groundY(player.x, player.z)
     const seat = player.vehicle === 'bike' ? 0.34 : 0
     const roadBump = player.vehicle && player.moving ? Math.sin(player.odo * 20) * 0.012 : 0

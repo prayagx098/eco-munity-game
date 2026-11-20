@@ -3,8 +3,85 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useGame, isNight } from '../../state/gameStore'
 import { DAY_LENGTH } from '../../state/gameData'
 import { PRESETS, useSettings, type Quality } from '../../state/settings'
+import { useAuth } from '../../state/auth'
 
-type Tab = 'game' | 'graphics' | 'sound' | 'access'
+type Tab = 'game' | 'graphics' | 'sound' | 'access' | 'account'
+
+/** Who am I playing as, log out, change password, delete my data */
+function AccountTab() {
+  const status = useAuth((a) => a.status)
+  const user = useAuth((a) => a.user)
+  const [oldPw, setOldPw] = useState('')
+  const [newPw, setNewPw] = useState('')
+  const [delPw, setDelPw] = useState('')
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  if (status !== 'in' || !user)
+    return (
+      <div className="rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-800">
+        You are playing as a guest, so your coins and story are only kept on this device. Log out of the guest session (reload the page) and choose <b>Sign up</b> to keep them in an account – your guest progress is carried over.
+        <button onClick={() => window.location.reload()} className="mt-2 block w-full rounded-lg bg-amber-500 py-1.5 text-white">
+          Go to sign up
+        </button>
+      </div>
+    )
+  const field = 'w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium outline-none focus:border-indigo-400'
+  return (
+    <>
+      <div className="rounded-xl bg-emerald-50 p-2.5 text-xs font-semibold text-emerald-800">
+        ✅ Logged in as <b>{user.username}</b>
+        <div className="mt-0.5 text-[10px] font-medium text-emerald-700">Coins, items, projects, badges and story are saved to your account automatically.</div>
+      </div>
+      <button onClick={() => void useAuth.getState().logout()} className="w-full rounded-xl bg-slate-100 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200">
+        Log out
+      </button>
+      <Section title="Change password">
+        <div className="grid gap-1.5">
+          <input type="password" value={oldPw} onChange={(e) => setOldPw(e.target.value)} placeholder="Current password" className={field} autoComplete="current-password" />
+          <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="New password (6+ characters)" className={field} autoComplete="new-password" />
+          <button
+            onClick={async () => {
+              const err = await useAuth.getState().changePassword(oldPw, newPw)
+              setMsg(err ? { ok: false, text: err } : { ok: true, text: 'Password changed.' })
+              if (!err) (setOldPw(''), setNewPw(''))
+            }}
+            className="rounded-lg bg-indigo-500 py-1.5 text-xs font-bold text-white hover:bg-indigo-600"
+          >
+            Change password
+          </button>
+        </div>
+      </Section>
+      <Section title="Delete my account">
+        {confirmDelete ? (
+          <div className="grid gap-1.5">
+            <p className="text-[11px] font-semibold text-rose-700">This erases your coins, items, projects and story for good.</p>
+            <input type="password" value={delPw} onChange={(e) => setDelPw(e.target.value)} placeholder="Type your password" className={field} />
+            <div className="grid grid-cols-2 gap-1.5">
+              <button onClick={() => setConfirmDelete(false)} className="rounded-lg bg-slate-100 py-1.5 text-xs font-bold">
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  const err = await useAuth.getState().deleteAccount(delPw)
+                  if (err) setMsg({ ok: false, text: err })
+                  else window.location.reload()
+                }}
+                className="rounded-lg bg-rose-500 py-1.5 text-xs font-bold text-white"
+              >
+                Delete forever
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={() => setConfirmDelete(true)} className="w-full rounded-lg bg-rose-50 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-100">
+            Delete my account & data
+          </button>
+        )}
+      </Section>
+      {msg && <p className={`rounded-lg p-2 text-[11px] font-semibold ${msg.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>{msg.text}</p>}
+    </>
+  )
+}
 
 function Toggle({ label, hint, value, onChange }: { label: string; hint?: string; value: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -121,13 +198,14 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
             </div>
 
             {/* Tab selector */}
-            <div className="mx-3.5 mt-2.5 grid grid-cols-4 gap-1 rounded-xl bg-slate-100 p-1 text-[11px] sm:text-xs font-bold shrink-0">
+            <div className="mx-3.5 mt-2.5 grid grid-cols-5 gap-1 rounded-xl bg-slate-100 p-1 text-[11px] sm:text-xs font-bold shrink-0">
               {(
                 [
                   ['game', '🎮 Game'],
                   ['graphics', '🖥️ Look'],
                   ['sound', '🔊 Audio'],
                   ['access', '♿ Access'],
+                  ['account', '👤 Me'],
                 ] as [Tab, string][]
               ).map(([t, l]) => (
                 <button
@@ -271,6 +349,8 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
                   </Section>
                 </>
               )}
+
+              {tab === 'account' && <AccountTab />}
 
               {tab === 'sound' && (
                 <>

@@ -3,6 +3,7 @@ import { useGame } from '../state/gameStore'
 import { keys, view } from '../state/sceneRegistry'
 import { useView } from '../state/viewMode'
 import { useUI } from '../state/ui'
+import { useStory } from '../state/story'
 import { toggleFullscreen } from '../utils/fullscreen'
 
 const MOVE_KEYS: Record<string, string> = {
@@ -45,6 +46,7 @@ export function useKeyboard() {
         } else if (s.chatWith) s.closeChat()
         else if (s.bigMap) s.toggleBigMap(false)
         else if (s.badgesOpen) s.toggleBadges(false)
+        else if (useStory.getState().bookOpen) useStory.getState().setBook(false)
         ;(document.activeElement as HTMLElement | null)?.blur?.()
         return
       }
@@ -60,6 +62,9 @@ export function useKeyboard() {
         case 'KeyE':
           e.preventDefault()
           s.interact()
+          break
+        case 'KeyJ':
+          useStory.getState().setBook()
           break
         case 'KeyQ':
           s.dropCarried()

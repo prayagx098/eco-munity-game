@@ -3,16 +3,14 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { WebSocketServer, WebSocket } from 'ws'
+import * as store from './store.js'
+import { handleAuth, sanitizeStory } from './auth.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DIST_DIR = path.join(__dirname, 'dist')
-const DATA_DIR = path.join(__dirname, 'data', 'rooms')
 const PORT = process.env.PORT || 8080
 
-// Ensure persistent data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true })
-}
+store.connect()
 
 /**
  * In-memory room manager backed by persistent JSON files on disk.
@@ -29,10 +27,6 @@ class RoomManager {
     return raw.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 32) || 'default'
   }
 
-  getFilePath(safeRoom) {
-    return path.join(DATA_DIR, `${safeRoom}.json`)
-  }
-
   getRoom(rawName) {
     const name = this.cleanRoomName(rawName)
     let room = this.rooms.get(name)
@@ -44,19 +38,19 @@ class RoomManager {
         saveTimer: null,
         dirty: false,
         lastSaved: 0,
+        loading: Promise.resolve(),
       }
 
-      // Try loading existing saved state from disk
-      const filePath = this.getFilePath(name)
-      if (fs.existsSync(filePath)) {
-        try {
-          const raw = fs.readFileSync(filePath, 'utf-8')
-          room.world = JSON.parse(raw)
-          console.log(`💾 [Storage] Loaded persistent live data for room "${name}"`)
-        } catch (err) {
-          console.error(`⚠️ [Storage] Could not load ${filePath}:`, err.message)
-        }
-      }
+      // Load the saved world (MongoDB, or local files in development). Players wait for this before they get the world.
+      room.loading = store
+        .loadWorld(name)
+        .then((world) => {
+          if (world && !room.world) {
+            room.world = world
+            console.log(`💾 [Storage] Loaded persistent live data for room "${name}"`)
+          }
+        })
+        .catch((err) => console.error(`⚠️ [Storage] Could not load room "${name}":`, err.message))
 
       this.rooms.set(name, room)
     }
@@ -70,17 +64,15 @@ class RoomManager {
       room.saveTimer = null
     }
 
-    try {
-      const filePath = this.getFilePath(room.name)
-      const tmpPath = `${filePath}.tmp`
-      fs.writeFileSync(tmpPath, JSON.stringify(room.world, null, 2), 'utf-8')
-      fs.renameSync(tmpPath, filePath)
-      room.dirty = false
-      room.lastSaved = Date.now()
-      console.log(`💾 [Storage] Successfully saved live data for room "${room.name}"`)
-    } catch (err) {
-      console.error(`⚠️ [Storage] Failed to save room "${room.name}":`, err.message)
-    }
+    room.dirty = false
+    room.lastSaved = Date.now()
+    return store
+      .saveWorld(room.name, room.world)
+      .then(() => console.log(`💾 [Storage] Saved live data for room "${room.name}"`))
+      .catch((err) => {
+        room.dirty = true
+        console.error(`⚠️ [Storage] Failed to save room "${room.name}":`, err.message)
+      })
   }
 
   queueSave(room) {
@@ -103,15 +95,10 @@ class RoomManager {
       room.saveTimer = null
     }
 
-    const filePath = this.getFilePath(name)
-    if (fs.existsSync(filePath)) {
-      try {
-        fs.unlinkSync(filePath)
-        console.log(`🧹 [Storage] Reset saved data for room "${name}"`)
-      } catch (err) {
-        console.error(`⚠️ [Storage] Failed to delete ${filePath}:`, err.message)
-      }
-    }
+    store
+      .deleteWorld(name)
+      .then(() => console.log(`🧹 [Storage] Reset saved data for room "${name}"`))
+      .catch((err) => console.error(`⚠️ [Storage] Failed to reset room "${name}":`, err.message))
 
     // Broadcast reset to active players
     const resetMsg = JSON.stringify({ t: 'reset', from: 'server' })
@@ -122,12 +109,8 @@ class RoomManager {
     }
   }
 
-  flushAll() {
-    for (const room of this.rooms.values()) {
-      if (room.dirty) {
-        this.saveRoomImmediate(room)
-      }
-    }
+  async flushAll() {
+    await Promise.all([...this.rooms.values()].filter((r) => r.dirty).map((r) => this.saveRoomImmediate(r)))
   }
 }
 
@@ -159,8 +142,8 @@ const server = http.createServer((req, res) => {
 
   // CORS headers for all responses
   res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204)
@@ -222,6 +205,59 @@ const server = http.createServer((req, res) => {
     return res.end(JSON.stringify({ status: 'ok', message: `Room "${roomName}" reset successfully.` }))
   }
 
+  // Accounts: /api/auth/* and /api/me*
+  if (pathname.startsWith('/api/auth/') || pathname.startsWith('/api/me')) {
+    handleAuth(req, res, pathname)
+    return
+  }
+
+  // API 4: a player's story progress (stored in MongoDB). The id is a random per-browser id.
+  if (pathname === '/api/story') {
+    const pid = parsedUrl.searchParams.get('pid') || ''
+    const json = (code, body) => {
+      res.writeHead(code, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(body))
+    }
+    if (!/^[A-Za-z0-9_-]{8,64}$/.test(pid)) return json(400, { error: 'bad player id' })
+    if (req.method === 'GET') {
+      store
+        .loadStory(pid)
+        .then((state) => json(200, { state }))
+        .catch((err) => (console.error('⚠️ [Story] load failed:', err.message), json(503, { error: 'storage unavailable' })))
+      return
+    }
+    if (req.method === 'DELETE') {
+      store
+        .deleteStory(pid)
+        .then(() => json(200, { ok: true }))
+        .catch(() => json(503, { error: 'storage unavailable' }))
+      return
+    }
+    if (req.method === 'PUT' || req.method === 'POST') {
+      let body = ''
+      req.on('data', (c) => {
+        body += c
+        if (body.length > 20000) req.destroy()
+      })
+      req.on('end', () => {
+        let parsed
+        try {
+          parsed = JSON.parse(body)
+        } catch {
+          return json(400, { error: 'bad json' })
+        }
+        const state = sanitizeStory(parsed?.state)
+        if (!state) return json(400, { error: 'bad story state' })
+        store
+          .saveStory(pid, state)
+          .then(() => json(200, { ok: true }))
+          .catch((err) => (console.error('⚠️ [Story] save failed:', err.message), json(503, { error: 'storage unavailable' })))
+      })
+      return
+    }
+    return json(405, { error: 'method not allowed' })
+  }
+
   // If dist doesn't exist, return relay status
   if (!fs.existsSync(DIST_DIR)) {
     res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -279,11 +315,13 @@ wss.on('connection', (ws, req) => {
 
   console.log(`🔌 [WS] Client ${ws.clientId} joined room "${room.name}" (${room.clients.size} online)`)
 
-  // 1. Immediately send saved authoritative world state to the joining player
-  if (room.world) {
-    ws.send(JSON.stringify({ t: 'world', s: room.world, from: 'server' }))
-    console.log(`📤 [WS] Dispatched saved world data to ${ws.clientId} in "${room.name}"`)
-  }
+  // 1. Send the saved authoritative world state to the joining player (once it has been loaded from storage)
+  room.loading.then(() => {
+    if (room.world && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ t: 'world', s: room.world, from: 'server' }))
+      console.log(`📤 [WS] Dispatched saved world data to ${ws.clientId} in "${room.name}"`)
+    }
+  })
 
   // 2. Handle incoming messages from this client
   ws.on('message', (message, isBinary) => {
@@ -335,19 +373,21 @@ wss.on('connection', (ws, req) => {
 })
 
 // Graceful process shutdown: flush all saves to disk
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
   console.log('🛑 [Server] Shutting down, saving live room data...')
-  roomManager.flushAll()
+  await roomManager.flushAll()
+  await store.close()
   process.exit(0)
 })
 
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
   console.log('🛑 [Server] Received SIGTERM, saving live room data...')
-  roomManager.flushAll()
+  await roomManager.flushAll()
+  await store.close()
   process.exit(0)
 })
 
 server.listen(PORT, () => {
   console.log(`🌍 Eco-munity Relay & Storage Server running on http://localhost:${PORT}`)
-  console.log(`📁 Persistent storage path: ${DATA_DIR}`)
+  console.log(`💾 Storage: ${store.usingMongo ? 'MongoDB Atlas' : 'local JSON files (set MONGODB_URI to use MongoDB)'}`)
 })
