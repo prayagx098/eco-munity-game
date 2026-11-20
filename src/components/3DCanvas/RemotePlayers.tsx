@@ -4,7 +4,7 @@ import type { Group } from 'three'
 import { useGame, type Profile } from '../../state/gameStore'
 import { TRASH_BY_ID } from '../../state/gameData'
 import { env, remotePlayers } from '../../state/sceneRegistry'
-import { groundY } from '../../state/world'
+import { groundY, type VehicleKind } from '../../state/world'
 import { Label } from './primitives'
 import { VehicleMesh } from './Vehicles'
 import { Minifig, SpeechBubble, type MinifigAnim } from './NPCs'
@@ -18,7 +18,7 @@ function RemotePlayer({ id, profile }: { id: string; profile: Profile }) {
   const pos = useRef<{ x: number; z: number; h: number } | null>(null)
   const puffT = useRef(0)
   const [carry, setCarry] = useState<string | null>(null)
-  const [vehicle, setVehicle] = useState<'bike' | null>(null)
+  const [vehicle, setVehicle] = useState<VehicleKind | null>(null)
   const odo = useRef(0)
   const jumpY = useRef(0)
   const body = useRef<Group>(null)

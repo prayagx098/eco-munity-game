@@ -1,8 +1,8 @@
-import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useId, useRef, type ReactNode } from 'react'
 import { useFrame } from '@react-three/fiber'
 import type { Group, Mesh } from 'three'
 import { getTownEcoStatus, useGame } from '../../state/gameStore'
-import { bodies, companionPos, duckFeeds, fetchStick, player } from '../../state/sceneRegistry'
+import { bodies, companionPos, fetchStick, player } from '../../state/sceneRegistry'
 import { POND, RIVER, groundY } from '../../state/world'
 import { Block, Label, Plastic } from './primitives'
 import { sfx } from '../../audio/audio'
@@ -821,18 +821,106 @@ function FlyingGull({ cx, cz, r, h, speed, phase }: { cx: number; cz: number; r:
   )
 }
 
-/** Ducks paddling in circles around the pond */
+/** Ducks paddling in circles around the pond (gather and eat when fed seeds) */
 function SwimmingDuck({ r, speed, offset }: { r: number; speed: number; offset: number }) {
   const ref = useRef<Group>(null)
   useFrame(({ clock }) => {
     if (!ref.current) return
-    const a = clock.elapsedTime * speed + offset
-    ref.current.position.set(POND.x + Math.cos(a) * r, 0.02 + Math.sin(clock.elapsedTime * 3 + offset) * 0.02, POND.z + Math.sin(a) * r)
-    ref.current.rotation.y = -a + (speed > 0 ? 0 : Math.PI)
+    const curFeed = duckFeeds.length > 0 ? duckFeeds[duckFeeds.length - 1] : null
+    const feedActive = curFeed && Date.now() - curFeed.time < 5000
+
+    if (feedActive) {
+      const cur = ref.current.position
+      const dx = curFeed.x + Math.sin(offset) * 0.8 - cur.x
+      const dz = curFeed.z + Math.cos(offset) * 0.8 - cur.z
+      const dist = Math.hypot(dx, dz)
+      if (dist > 0.35) {
+        cur.x += (dx / dist) * 0.03
+        cur.z += (dz / dist) * 0.03
+        ref.current.rotation.y = Math.atan2(dx, dz)
+      } else {
+        ref.current.rotation.x = Math.sin(clock.elapsedTime * 6) * 0.12 // pecking seeds
+      }
+      cur.y = 0.02 + Math.sin(clock.elapsedTime * 3 + offset) * 0.02
+    } else {
+      const a = clock.elapsedTime * speed + offset
+      ref.current.position.set(POND.x + Math.cos(a) * r, 0.02 + Math.sin(clock.elapsedTime * 3 + offset) * 0.02, POND.z + Math.sin(a) * r)
+      ref.current.rotation.y = -a + (speed > 0 ? 0 : Math.PI)
+      ref.current.rotation.x = 0
+    }
   })
   return (
     <group ref={ref}>
       <Duck />
+    </group>
+  )
+}
+
+function FetchStickMesh() {
+  const ref = useRef<Group>(null)
+  const companion = useGame((s) => s.companion)
+  useFrame((_, dt) => {
+    if (!ref.current) return
+    if (!fetchStick.active) {
+      ref.current.visible = false
+      return
+    }
+    ref.current.visible = true
+    if (fetchStick.state === 'flying') {
+      fetchStick.progress = Math.min(1, fetchStick.progress + dt * 1.5)
+      const p = fetchStick.progress
+      fetchStick.x = player.x + (fetchStick.targetX - player.x) * p
+      fetchStick.z = player.z + (fetchStick.targetZ - player.z) * p
+      fetchStick.y = groundY(fetchStick.x, fetchStick.z) + Math.sin(p * Math.PI) * 1.6 + 0.1
+      if (p >= 1) fetchStick.state = 'on_ground'
+    } else if (fetchStick.state === 'on_ground') {
+      fetchStick.y = groundY(fetchStick.targetX, fetchStick.targetZ) + 0.05
+      fetchStick.x = fetchStick.targetX
+      fetchStick.z = fetchStick.targetZ
+    } else if (fetchStick.state === 'returning') {
+      fetchStick.x = companionPos.x
+      fetchStick.z = companionPos.z
+      fetchStick.y = groundY(companionPos.x, companionPos.z) + 0.35
+    }
+    ref.current.position.set(fetchStick.x, fetchStick.y, fetchStick.z)
+    ref.current.rotation.x += dt * 4
+    ref.current.rotation.z += dt * 2
+  })
+  if (!companion || companion.kind !== 'dog') return null
+  return (
+    <group ref={ref} visible={false}>
+      <mesh rotation={[0, 0, Math.PI / 4]} castShadow>
+        <cylinderGeometry args={[0.032, 0.028, 0.45, 8]} />
+        <meshStandardMaterial color="#854d0e" roughness={0.9} />
+      </mesh>
+    </group>
+  )
+}
+
+function PondDuckFeeds() {
+  const [, setT] = useState(0)
+  useFrame(() => {
+    if (duckFeeds.length > 0) setT((n) => n + 1)
+  })
+  const activeFeeds = duckFeeds.filter((f) => Date.now() - f.time < 5000)
+  if (activeFeeds.length === 0) return null
+  return (
+    <group>
+      {activeFeeds.map((f) => (
+        <group key={f.id} position={[f.x, 0.04, f.z]}>
+          {[0, 1, 2, 3].map((i) => (
+            <mesh key={i} position={[(i % 2 - 0.5) * 0.22, 0, (Math.floor(i / 2) - 0.5) * 0.22]}>
+              <sphereGeometry args={[0.035, 6, 4]} />
+              <meshStandardMaterial color="#facc15" roughness={0.6} />
+            </mesh>
+          ))}
+          {/* Water ripple ring */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.25, 0.32, 16]} />
+            <meshBasicMaterial color="#38bdf8" transparent opacity={0.6} />
+          </mesh>
+        </group>
+      ))}
     </group>
   )
 }
