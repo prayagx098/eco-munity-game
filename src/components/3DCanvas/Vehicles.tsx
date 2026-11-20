@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { Group } from 'three'
 import { bodies, npcPositions, player, remotePlayers } from '../../state/sceneRegistry'
-import { STANDS, VEHICLES, ROAD_X, WORLD_HALF, JUNCTIONS, groundY, lightState, type VehicleEntity, type VehicleKind } from '../../state/world'
+import { STANDS, VEHICLES, LANE_OFF, ROAD_W, ROAD_X, WORLD_HALF, JUNCTIONS, groundY, lightState, type VehicleEntity, type VehicleKind } from '../../state/world'
 import { Label, Marker, Near } from './primitives'
 import { useGame, isNight } from '../../state/gameStore'
 
@@ -927,12 +927,12 @@ function ElectricBusBody({
 function Car({ c }: { c: CarSpec }) {
   const g = useRef<Group>(null)
   const wheels = useRef<Group[]>([])
-  const st = useRef({ p: c.pos, v: c.speed, odo: 0, pv: c.speed, h: NaN, pitch: 0, brake: 0 })
+  const st = useRef({ p: c.pos, v: c.speed, odo: 0, pv: c.speed, h: NaN, pitch: 0, brake: 0, acc: 0 })
   const tilt = useRef<Group>(null)
   const brakeMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#7f1d1d', emissive: '#ff1a1a', emissiveIntensity: 0.5 }), [])
   const alongZ = c.axis === 'z'
   // right-hand traffic: lane offset from road centre line
-  const lat = alongZ ? ROAD_X - c.lane * 1.25 : (c.road ?? 0) + c.lane * 1.25
+  const lat = alongZ ? ROAD_X - c.lane * LANE_OFF : (c.road ?? 0) + c.lane * LANE_OFF
   const len = c.kind === 'bus' ? 5.2 : 2.95
   const bodyKey = `car-${c.id}`
 
@@ -952,7 +952,7 @@ function Car({ c }: { c: CarSpec }) {
       const along = alongZ ? z : x
       const across = alongZ ? x : z
       const d = (along - s.p) * c.lane
-      return Math.abs(across - lat) < 2.2 && d > 0 && d < len + 4
+      return Math.abs(across - lat) < 1.55 && d > 0 && d < len + 4
     }
 
     let blocked = false
@@ -966,7 +966,7 @@ function Car({ c }: { c: CarSpec }) {
     for (const j of JUNCTIONS) {
       if (!alongZ && j.z !== c.road) continue
       const jp = alongZ ? j.z : j.x
-      const toLine = (jp - s.p) * c.lane - 3.6
+      const toLine = (jp - s.p) * c.lane - (ROAD_W / 2 + 0.3)
       if (toLine > -0.2 && toLine < 9) {
         const light = lightState(c.axis)
         if (light === 'red' || (light === 'yellow' && toLine > 2.5)) blocked = true
@@ -992,12 +992,10 @@ function Car({ c }: { c: CarSpec }) {
     // suspension: nose dives when braking, squats when pulling away, with a light road bob at speed
     const accel = (s.v - s.pv) / Math.max(dt, 1e-3)
     s.pv = s.v
-    s.pitch += (Math.max(-0.045, Math.min(0.045, -accel * 0.02)) - s.pitch) * Math.min(1, dt * 8)
-    if (tilt.current) {
-      tilt.current.rotation.x = s.pitch
-      tilt.current.position.y = Math.sin(s.odo * 7) * 0.006 * Math.min(1, s.v / 3)
-    }
-    s.brake += ((blocked || accel < -0.4 ? 1 : 0) - s.brake) * Math.min(1, dt * 12)
+    s.acc += (accel - s.acc) * Math.min(1, dt * 4) // filtered so stop/start flicker never snaps the body
+    s.pitch += (Math.max(-0.035, Math.min(0.035, -s.acc * 0.015)) - s.pitch) * Math.min(1, dt * 5)
+    if (tilt.current) tilt.current.rotation.x = s.pitch
+    s.brake += ((blocked || s.acc < -0.4 ? 1 : 0) - s.brake) * Math.min(1, dt * 8)
     brakeMat.emissiveIntensity = 0.5 + s.brake * 3
 
     const fwdX = alongZ ? 0 : c.lane
@@ -1005,7 +1003,12 @@ function Car({ c }: { c: CarSpec }) {
     const cars = len > 3 ? 3 : 2
     for (let i = 0; i < cars; i++) {
       const off = (i - (cars - 1) / 2) * (len / cars)
-      bodies.set(`${bodyKey}-${i}`, { x: x + fwdX * off, z: z + fwdZ * off, r: 0.95 })
+      const key = `${bodyKey}-${i}`
+      const b = bodies.get(key)
+      if (b) {
+        b.x = x + fwdX * off
+        b.z = z + fwdZ * off
+      } else bodies.set(key, { x: x + fwdX * off, z: z + fwdZ * off, r: 0.95 })
     }
     for (const w of wheels.current) if (w) w.rotation.x = s.odo / 0.3
   })

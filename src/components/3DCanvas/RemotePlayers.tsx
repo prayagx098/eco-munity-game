@@ -20,6 +20,7 @@ function RemotePlayer({ id, profile }: { id: string; profile: Profile }) {
   const [carry, setCarry] = useState<string | null>(null)
   const [vehicle, setVehicle] = useState<'bike' | null>(null)
   const odo = useRef(0)
+  const jumpY = useRef(0)
   const body = useRef<Group>(null)
   const vehRef = useRef<Group>(null)
   const nearby = useGame((s) => s.nearbyMate === id)
@@ -42,11 +43,14 @@ function RemotePlayer({ id, profile }: { id: string; profile: Profile }) {
     let dh = r.heading - p.h
     dh = Math.atan2(Math.sin(dh), Math.cos(dh))
     p.h += dh * k
-    g.position.set(p.x, 0.06 + groundY(p.x, p.z), p.z)
+    // jump height arrives 10×/s, so ease towards it quickly (and drop faster than it rises)
+    jumpY.current += ((r.jump ?? 0) - jumpY.current) * (1 - Math.exp(-dt * 22))
+    g.position.set(p.x, 0.06 + groundY(p.x, p.z) + jumpY.current, p.z)
     g.rotation.y = p.h
     anim.current.speed += ((r.moving ? (r.running ? 1.6 : 1) : 0) - anim.current.speed) * Math.min(1, dt * 10)
     anim.current.armsUp = !!r.carry && !r.vehicle
     anim.current.ride = !!r.vehicle
+    anim.current.jump = Math.min(1, jumpY.current / 0.7)
     if (r.carry !== carry) setCarry(r.carry)
     if (r.vehicle !== vehicle) setVehicle(r.vehicle)
     if (body.current) body.current.position.y = r.vehicle === 'bike' ? 0.34 : 0

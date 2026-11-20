@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { usePreset } from '../../state/settings'
-import { RIVER, ROADS_EW, ROAD_X, WORLD_HALF } from '../../state/world'
+import { RIVER, ROADS_EW, ROAD_W, ROAD_X, WORLD_HALF } from '../../state/world'
 import { Block, sharedMaterials } from './primitives'
 import { getTexture } from './textures'
 import { seeded } from './Weather'
@@ -179,8 +179,8 @@ export function Outskirts() {
       const d = Math.max(Math.abs(x), Math.abs(z))
       if (d < E + 0.5 || x > WORLD_HALF + 0.5) continue
       if (r() > Math.exp(-(d - E) / 28)) continue
-      if (Math.abs(x - ROAD_X) < 4.5) continue // keep the road clear
-      if (x < 0 && ROADS_EW.some((r) => Math.abs(z - r.z) < 4)) continue
+      if (Math.abs(x - ROAD_X) < 6.5) continue // keep the road clear
+      if (x < 0 && ROADS_EW.some((r) => Math.abs(z - r.z) < 6)) continue
       if (Math.abs(z - (RIVER.z0 + RIVER.z1) / 2) < 5 && x < 0) continue // and the river
       const s = 1.1 + r() * 1.5
       tr.push({ p: [x, 0, z], s: [s, s * (0.9 + r() * 0.5), s], c: greens[Math.floor(r() * greens.length)], r: r() * 3 })
@@ -199,9 +199,9 @@ export function Outskirts() {
         const x = side === 'w' ? -WORLD_HALF - 0.1 : side === 'e' ? WORLD_HALF + 0.1 : t
         const z = side === 'n' ? -WORLD_HALF - 0.1 : side === 's' ? WORLD_HALF + 0.1 : t
         if (side === 'e') continue // sea / beach side
-        if ((side === 'n' || side === 's') && Math.abs(x - ROAD_X) < 3.4) continue // road gate
+        if ((side === 'n' || side === 's') && Math.abs(x - ROAD_X) < 5.4) continue // road gate
         if (side === 'w' && Math.abs(z - (RIVER.z0 + RIVER.z1) / 2) < 4.2) continue
-        if (side === 'w' && ROADS_EW.some((r) => Math.abs(z - r.z) < 3.4)) continue
+        if (side === 'w' && ROADS_EW.some((r) => Math.abs(z - r.z) < 5.4)) continue
         const s = 0.7 + r() * 0.9
         const shrub = r() > 0.6
         out.push({ p: [x + (r() - 0.5), shrub ? s * 0.3 : s * 0.35, z + (r() - 0.5)], s: [s * 1.2, shrub ? s * 0.7 : s * 0.8, s], c: tones[Math.floor(r() * tones.length)], r: r() * 3 })
@@ -238,11 +238,11 @@ export function Outskirts() {
 
       {/* the road carries on into the distance */}
       {[-1, 1].map((sd) => (
-        <Block key={sd} position={[ROAD_X, 0.05, sd * (E + 150)]} size={[5, 0.1, 300]} color="#55565e" cast={false} receive={false} tex="asphalt" texScale={3} />
+        <Block key={sd} position={[ROAD_X, 0.05, sd * (E + 150)]} size={[ROAD_W, 0.1, 300]} color="#55565e" cast={false} receive={false} tex="asphalt" texScale={3} />
       ))}
 
       {ROADS_EW.flatMap((r) =>
-        [-1].map((sd) => <Block key={`${r.z}${sd}`} position={[sd * (E + 150), 0.05, r.z]} size={[300, 0.1, 5]} color="#55565e" cast={false} receive={false} tex="asphalt" texScale={3} />),
+        [-1].map((sd) => <Block key={`${r.z}${sd}`} position={[sd * (E + 150), 0.05, r.z]} size={[300, 0.1, ROAD_W]} color="#55565e" cast={false} receive={false} tex="asphalt" texScale={3} />),
       )}
 
       <InstancedField geometry={hillGeo} material={flat} items={hills} />
@@ -255,7 +255,7 @@ export function Outskirts() {
       {/* "road closed" barriers where the road leaves the playable town */}
       {[-1, 1].map((sd) => (
         <group key={sd} position={[ROAD_X, 0, sd * (WORLD_HALF - 1.4)]}>
-          {[-2.4, 2.4].map((x) => (
+          {[-ROAD_W / 2, ROAD_W / 2].map((x) => (
             <Block key={x} position={[x, 0.45, 0]} size={[0.2, 0.9, 0.2]} color="#334155" />
           ))}
         </group>

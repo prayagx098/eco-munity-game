@@ -16,6 +16,7 @@ import {
   POND,
   ECO_HUB,
   RIVER,
+  ROAD_W,
   ROAD_X,
   ROADS_EW,
   SCHOOL_E,
@@ -58,9 +59,9 @@ const MapStatic = memo(function MapStatic({ dot }: { dot: number }) {
         <rect x={SEA.x0} y={SEA.z0} width={SEA.x1 - SEA.x0} height={SEA.z1 - SEA.z0} fill="#3fa9e0" />
         {R(LEARNING_CORNER, '#b9773e')}
         {/* road + paths */}
-        <rect x={ROAD_X - 2.5} y={-W} width={5} height={W * 2} fill="#55565e" />
+        <rect x={ROAD_X - ROAD_W / 2} y={-W} width={ROAD_W} height={W * 2} fill="#55565e" />
         {ROADS_EW.map((r) => (
-          <rect key={r.z} x={-W} y={r.z - 2.5} width={W * 2} height={5} fill="#55565e" />
+          <rect key={r.z} x={-W} y={r.z - ROAD_W / 2} width={W * 2} height={ROAD_W} fill="#55565e" />
         ))}
         {PATHS.map((p, i) => R(p, '#f1eff3', i))}
         <rect x={-2.4} y={RIVER.z0} width={4.8} height={RIVER.z1 - RIVER.z0} fill="#b9773e" />

@@ -18,6 +18,7 @@ import {
   HOUSES,
   LAMPS,
   RECYCLING_CENTER,
+  ROAD_W,
   ROAD_X,
   TAPS,
   TREES,
@@ -151,7 +152,7 @@ export function Neighbourhood() {
         <Block position={[0, 3.75, 0]} size={[3.7, 0.3, 5.3]} color="#a8642a" tex="roof" texScale={2} />
       </group>
       {lamps.map((z) => (
-        <StreetLamp key={z} position={[ROAD_X + 3, 0, z]} />
+        <StreetLamp key={z} position={[ROAD_X + ROAD_W / 2 + 1.2, 0, z]} />
       ))}
     </group>
   )

@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { env } from '../../state/sceneRegistry'
 import { usePreset } from '../../state/settings'
 import { useGame, getTownEcoStatus } from '../../state/gameStore'
-import { NO_GRASS, PATHS, POND, RIVER, ROAD_X, ROADS_EW, WORLD_HALF, collides } from '../../state/world'
+import { NO_GRASS, PATHS, POND, RIVER, ROAD_W, ROAD_X, ROADS_EW, WALK_W, WORLD_HALF, collides } from '../../state/world'
 import { seeded } from './Weather'
 import { getTexture } from './textures'
 
@@ -91,8 +91,8 @@ export function Grass() {
       tries++
       const x = (r() - 0.5) * (WORLD_HALF * 2 - 2)
       const z = (r() - 0.5) * (WORLD_HALF * 2 - 2)
-      if (Math.abs(x - ROAD_X) < 4.8) continue // north-south road & sidewalks
-      if (ROADS_EW.some((r) => Math.abs(z - r.z) < 4.8)) continue // cross roads & sidewalks
+      if (Math.abs(x - ROAD_X) < ROAD_W / 2 + WALK_W + 0.3) continue // north-south road & sidewalks
+      if (ROADS_EW.some((r) => Math.abs(z - r.z) < ROAD_W / 2 + WALK_W + 0.3)) continue // cross roads & sidewalks
       if (z > RIVER.z0 - 1.6 && z < RIVER.z1 + 1.6) continue // river & banks
       if (Math.hypot(x - POND.x, z - POND.z) < POND.r + 1.1) continue
       if (x > 27.5 && x < 38.5 && z > 15.8 && z < 25) continue // farm yard

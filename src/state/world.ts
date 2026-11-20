@@ -29,7 +29,11 @@ export const ROAD_X = -24
 export const RIVER = { z0: 30, z1: 36 }
 /** Cross roads (east–west). Each meets the main road at a junction with traffic lights. */
 export const ROADS_EW = [{ z: -47 }, { z: 48 }]
-export const ROAD_W = 5
+export const ROAD_W = 8
+/** footpath each side of every road */
+export const WALK_W = 2
+/** distance from a road's centre line to the middle of each traffic lane */
+export const LANE_OFF = ROAD_W / 4
 export const JUNCTIONS = ROADS_EW.map((r) => ({ x: ROAD_X, z: r.z }))
 
 /** Traffic-light phase for each axis, from the wall clock so every player sees the same colour */
@@ -207,9 +211,9 @@ export const NO_GRASS: Rect[] = [
   BEACH,
   LEARNING_CORNER,
   { x0: -1.5, x1: 1.5, z0: -WORLD_HALF, z1: -24 },
-  { x0: ROAD_X - 4.8, x1: ROAD_X + 4.8, z0: -WORLD_HALF, z1: WORLD_HALF },
+  { x0: ROAD_X - ROAD_W / 2 - WALK_W - 0.3, x1: ROAD_X + ROAD_W / 2 + WALK_W + 0.3, z0: -WORLD_HALF, z1: WORLD_HALF },
   SCHOOL_BUILDING,
-  ...ROADS_EW.map((r) => ({ x0: -WORLD_HALF - 1, x1: WORLD_HALF + 1, z0: r.z - 4.8, z1: r.z + 4.8 })),
+  ...ROADS_EW.map((r) => ({ x0: -WORLD_HALF - 1, x1: WORLD_HALF + 1, z0: r.z - ROAD_W / 2 - WALK_W - 0.3, z1: r.z + ROAD_W / 2 + WALK_W + 0.3 })),
   SCHOOL,
   ECO_HUB,
   HUB_YARD,
@@ -465,8 +469,8 @@ const TREES_ALL: [number, number, number][] = [
 /** Trees never stand on the cross roads or main road */
 export const TREES: [number, number, number][] = TREES_ALL.filter(
   ([x, z]) =>
-    Math.abs(x - ROAD_X) > 5.5 &&
-    ROADS_EW.every((r) => Math.abs(z - r.z) > 5.5) &&
+    Math.abs(x - ROAD_X) > 7.5 &&
+    ROADS_EW.every((r) => Math.abs(z - r.z) > 7.5) &&
     !(x > 9.5 && x < 30.5 && z > -30.5 && z < -10) &&
     !(x > SCHOOL_BUILDING.x0 - 1.5 && x < SCHOOL_BUILDING.x1 + 1.5 && z > SCHOOL_BUILDING.z0 - 1.5 && z < SCHOOL_BUILDING.z1 + 1.5) &&
     !(x > -10 && x < 10 && z < -49 && z > -70) &&
@@ -484,8 +488,8 @@ function marginTrees(): [number, number, number][] {
     const x = (rnd() * 2 - 1) * (WORLD_HALF - 2.5)
     const z = (rnd() * 2 - 1) * (WORLD_HALF - 2.5)
     if (Math.abs(x) < 61 && Math.abs(z) < 61) continue // the old town area is already planted
-    if (Math.abs(x - ROAD_X) < 6) continue
-    if (ROADS_EW.some((r) => Math.abs(z - r.z) < 5.5)) continue
+    if (Math.abs(x - ROAD_X) < 8) continue
+    if (ROADS_EW.some((r) => Math.abs(z - r.z) < 7.5)) continue
     if (z > RIVER.z0 - 2.5 && z < RIVER.z1 + 2.5) continue
     if (x > 53 && z > -25 && z < 31) continue // beach and sea
     if (Math.abs(x) < 12 && z < -49) continue // the Learning Centre and its forecourt
@@ -692,10 +696,10 @@ const PROP_RECTS: Rect[] = [
   thin(LEARNING_FORECOURT.x0 - 0.2, LEARNING_FORECOURT.x0 + 0.2, LEARNING_CORNER.z1, -50.3),
   thin(LEARNING_FORECOURT.x1 - 0.2, LEARNING_FORECOURT.x1 + 0.2, LEARNING_CORNER.z1, -50.3),
   // "road closed" barriers
-  thin(ROAD_X - 2.6, ROAD_X + 2.6, -WORLD_HALF + 1.3, -WORLD_HALF + 1.5),
-  thin(ROAD_X - 2.6, ROAD_X + 2.6, WORLD_HALF - 1.5, WORLD_HALF - 1.3),
+  thin(ROAD_X - ROAD_W / 2, ROAD_X + ROAD_W / 2, -WORLD_HALF + 1.3, -WORLD_HALF + 1.5),
+  thin(ROAD_X - ROAD_W / 2, ROAD_X + ROAD_W / 2, WORLD_HALF - 1.5, WORLD_HALF - 1.3),
   // the cross roads also end in barriers
-  ...ROADS_EW.flatMap((r) => [thin(-WORLD_HALF + 1.3, -WORLD_HALF + 1.5, r.z - 2.6, r.z + 2.6), thin(WORLD_HALF - 1.5, WORLD_HALF - 1.3, r.z - 2.6, r.z + 2.6)]),
+  ...ROADS_EW.flatMap((r) => [thin(-WORLD_HALF + 1.3, -WORLD_HALF + 1.5, r.z - ROAD_W / 2, r.z + ROAD_W / 2), thin(WORLD_HALF - 1.5, WORLD_HALF - 1.3, r.z - ROAD_W / 2, r.z + ROAD_W / 2)]),
 ]
 OBSTACLE_RECTS.push(...PROP_RECTS)
 /** Height of the player's feet above the ground (set by Player while jumping) so low obstacles can be hopped over */
@@ -804,7 +808,7 @@ export function groundY(x: number, z: number): number {
     h = Math.max(h, 0.31 * k)
   }
   // road bridge (deck top 0.25)
-  if (Math.abs(x - ROAD_X) <= 2.6) {
+  if (Math.abs(x - ROAD_X) <= ROAD_W / 2 + 0.1) {
     const k = Math.min(smooth((z - (RIVER.z0 - 0.8 - 1.2)) / 1.2), smooth((RIVER.z1 + 0.8 + 1.2 - z) / 1.2))
     h = Math.max(h, 0.19 * k)
   }

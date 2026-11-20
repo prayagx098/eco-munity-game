@@ -63,6 +63,8 @@ export function Player() {
   const pitch = useRef(0)
   const prevSpeed = useRef(0)
   const driftT = useRef(0)
+  const steerS = useRef(0)
+  const accelS = useRef(0)
 
   useFrame((_state, rawDt) => {
     const g = group.current
@@ -98,7 +100,10 @@ export function Player() {
     if (player.vehicle) {
       const spec = VEHICLES[player.vehicle]
       const gas = canMove ? (keys.has('up') ? 1 : 0) - (keys.has('down') ? 1 : 0) + (touchInput.moveActive ? touchInput.moveY : 0) : 0
-      const steer = canMove ? (keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0) + (touchInput.moveActive ? touchInput.moveX : 0) : 0
+      const steerIn = canMove ? THREE.MathUtils.clamp((keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0) + (touchInput.moveActive ? touchInput.moveX : 0), -1, 1) : 0
+      // handlebars swing smoothly instead of snapping, which removes the jerk when tapping a key
+      steerS.current += (steerIn - steerS.current) * Math.min(1, dt * 9)
+      const steer = steerS.current
       const top = keys.has('run') ? spec.run : spec.speed
       const goal = gas > 0 ? top : gas < 0 ? -top * 0.4 : 0
       const rate = gas === 0 ? 5 : gas > 0 && player.vspeed >= 0 ? 6 : 9
@@ -115,7 +120,7 @@ export function Player() {
       let moved = false
       if (!collides(nx, pz, rad, px, pz) && !bodyBlocked(px, pz, nx, pz, rad)) (player.x = nx), (moved = true)
       if (!collides(player.x, nz, rad, px, pz) && !bodyBlocked(player.x, pz, player.x, nz, rad)) (player.z = nz), (moved = true)
-      if (!moved && Math.abs(player.vspeed) > 0.5) player.vspeed *= 0.35 // bumped into something
+      if (!moved && Math.abs(player.vspeed) > 0.5) player.vspeed *= Math.max(0, 1 - 6 * dt) // bumped into something
       player.odo += Math.hypot(player.x - px, player.z - pz)
       player.moving = Math.abs(player.vspeed) > 0.4
       player.running = false
@@ -123,13 +128,14 @@ export function Player() {
 
       // Dynamic Bike Physics: roll lean into turns, pitch dive/squat, drift sparks
       const speedRatio = THREE.MathUtils.clamp(player.vspeed / top, -1, 1)
-      const targetLean = -steer * speedRatio * 0.38
-      lean.current += (targetLean - lean.current) * Math.min(1, dt * 8)
+      const targetLean = steer * Math.abs(speedRatio) * 0.45
+      lean.current += (targetLean - lean.current) * Math.min(1, dt * 6)
 
       const accel = (player.vspeed - prevSpeed.current) / Math.max(0.001, dt)
       prevSpeed.current = player.vspeed
-      const targetPitch = THREE.MathUtils.clamp(-accel * 0.015, -0.09, 0.14)
-      pitch.current += (targetPitch - pitch.current) * Math.min(1, dt * 10)
+      accelS.current += (accel - accelS.current) * Math.min(1, dt * 5) // filtered, so collisions don't snap the nose
+      const targetPitch = THREE.MathUtils.clamp(-accelS.current * 0.012, -0.07, 0.1)
+      pitch.current += (targetPitch - pitch.current) * Math.min(1, dt * 6)
 
       const isDrifting = (Math.abs(steer) > 0.55 && Math.abs(player.vspeed) > 4.2) || (gas < 0 && player.vspeed > 3)
       if (isDrifting) {
@@ -267,7 +273,7 @@ export function Player() {
     airborne.h = player.vehicle ? 0 : jumpY.current
     const gy = groundY(player.x, player.z)
     const seat = player.vehicle === 'bike' ? 0.34 : 0
-    const roadBump = player.vehicle && player.moving ? Math.sin(player.odo * 20) * 0.012 : 0
+    const roadBump = 0
 
     g.position.set(player.x, gy + 0.06 + jumpY.current + (player.vehicle ? roadBump : 0), player.z)
     g.rotation.y = player.heading
@@ -279,7 +285,7 @@ export function Player() {
 
     g.children[0].position.y = seat
     if (player.vehicle) {
-      g.children[0].rotation.z = lean.current * 0.85
+      g.children[0].rotation.z = lean.current * 0.6
       g.children[0].rotation.x = pitch.current * 0.85
       g.scale.set(1, 1, 1)
     } else {

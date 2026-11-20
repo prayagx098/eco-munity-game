@@ -59,6 +59,8 @@ export interface RemoteSnapshot {
   running: boolean
   carry: string | null // trash type id, 'pet', or null
   vehicle: 'bike' | null
+  /** height above the ground while jumping */
+  jump: number
   seen: number
 }
 export const remotePlayers = new Map<string, RemoteSnapshot>()

@@ -1,18 +1,20 @@
 import { Block } from './primitives'
 import { Pond, River } from './Nature'
-import { BRIDGE, PATHS, RIVER, ROADS_EW, ROAD_X, WORLD_HALF } from '../../state/world'
+import { BRIDGE, PATHS, RIVER, ROADS_EW, ROAD_W, ROAD_X, WALK_W, WORLD_HALF } from '../../state/world'
 
 const GRASS = '#7ccf4a'
 const PAVING = '#d9d5dc'
 const SAND = '#f2dc9b'
 const SIZE = WORLD_HALF * 2 + 2
+const HALF = ROAD_W / 2
+const WALL_X = ROAD_X + HALF + WALK_W + 0.3
 
 /** Grass, road, river, pond, bridges, paths and the low town wall */
 export function Ground() {
   const lanes = Array.from({ length: Math.ceil((WORLD_HALF * 2) / 3) + 1 }, (_, i) => -WORLD_HALF + i * 3)
-  const pillars = Array.from({ length: Math.ceil((WORLD_HALF * 2) / 3) }, (_, i) => -WORLD_HALF + 1 + i * 3).filter((z) => (z < -2 || z > 2) && z < RIVER.z0 - 1 && ROADS_EW.every((r) => Math.abs(z - r.z) > 3.4))
+  const pillars = Array.from({ length: Math.ceil((WORLD_HALF * 2) / 3) }, (_, i) => -WORLD_HALF + 1 + i * 3).filter((z) => (z < -2 || z > 2) && z < RIVER.z0 - 1 && ROADS_EW.every((r) => Math.abs(z - r.z) > HALF + 0.9))
   // side pavements of the main road stop where the cross roads begin
-  const edges = ROADS_EW.flatMap((r) => [r.z - 3.8, r.z + 3.8])
+  const edges = ROADS_EW.flatMap((r) => [r.z - HALF - WALK_W, r.z + HALF + WALK_W])
   const sideSegs: [number, number][] = [[-WORLD_HALF - 1, edges[0]], [edges[1], edges[2]], [edges[3], WORLD_HALF + 1]]
   const riverMid = (RIVER.z0 + RIVER.z1) / 2
   const riverW = RIVER.z1 - RIVER.z0
@@ -26,13 +28,13 @@ export function Ground() {
       {/* Maple Street pavement */}
       <Block position={[-37, 0.02, 0]} size={[16, 0.04, SIZE]} color="#c9e8a8" cast={false} tex="grass" texScale={5} />
       {sideSegs.flatMap(([a, b]) => [
-        <Block key={`w${a}`} position={[-27.2, 0.08, (a + b) / 2]} size={[1.3, 0.16, b - a]} color="#d8d2c8" cast={false} tex="paving" texScale={1.4} />,
-        <Block key={`e${a}`} position={[-21, 0.08, (a + b) / 2]} size={[0.9, 0.16, b - a]} color="#d8d2c8" cast={false} tex="paving" texScale={1.4} />,
+        <Block key={`w${a}`} position={[ROAD_X - HALF - WALK_W / 2, 0.08, (a + b) / 2]} size={[WALK_W, 0.16, b - a]} color="#d8d2c8" cast={false} tex="paving" texScale={1.4} />,
+        <Block key={`e${a}`} position={[ROAD_X + HALF + WALK_W / 2, 0.08, (a + b) / 2]} size={[WALK_W, 0.16, b - a]} color="#d8d2c8" cast={false} tex="paving" texScale={1.4} />,
       ])}
 
       {/* Road */}
-      <Block position={[ROAD_X, 0.05, 0]} size={[5, 0.1, SIZE]} color="#55565e" cast={false} roughness={0.95} tex="asphalt" texScale={3} bump={0.8} />
-      {lanes.filter((z) => ROADS_EW.every((r) => Math.abs(z - r.z) > 4.6)).map((z) => (
+      <Block position={[ROAD_X, 0.05, 0]} size={[ROAD_W, 0.1, SIZE]} color="#55565e" cast={false} roughness={0.95} tex="asphalt" texScale={3} bump={0.8} />
+      {lanes.filter((z) => ROADS_EW.every((r) => Math.abs(z - r.z) > HALF + 2.2)).map((z) => (
         <Block key={z} position={[ROAD_X, 0.115, z]} size={[0.18, 0.02, 1.4]} color="#ffffff" cast={false} />
       ))}
 
@@ -43,12 +45,12 @@ export function Ground() {
         [2, RIVER.z0 - 1.5],
       ].map(([a, b]) => (
         <group key={a}>
-          <Block position={[-20.5, 0.3, (a + b) / 2]} size={[0.35, 0.6, b - a]} color="#e8cfa8" tex="brick" texScale={1.2} />
-          <Block position={[-20.5, 1.05, (a + b) / 2]} size={[0.08, 0.08, b - a]} color="#222630" />
+          <Block position={[WALL_X, 0.3, (a + b) / 2]} size={[0.35, 0.6, b - a]} color="#e8cfa8" tex="brick" texScale={1.2} />
+          <Block position={[WALL_X, 1.05, (a + b) / 2]} size={[0.08, 0.08, b - a]} color="#222630" />
         </group>
       ))}
       {pillars.map((z) => (
-        <Block key={z} position={[-20.5, 0.65, z]} size={[0.7, 1.3, 0.7]} color="#e3c194" tex="brick" texScale={0.9} />
+        <Block key={z} position={[WALL_X, 0.65, z]} size={[0.7, 1.3, 0.7]} color="#e3c194" tex="brick" texScale={0.9} />
       ))}
 
       {/* Paths */}
@@ -87,17 +89,17 @@ export function Ground() {
         ))}
       </group>
       {/* zebra crossing where the villagers cross to Maple Street */}
-      {Array.from({ length: 6 }, (_, i) => (
-        <Block key={`z${i}`} position={[ROAD_X - 2.25 + i * 0.9, 0.12, 0]} size={[0.5, 0.02, 2.6]} color="#ffffff" cast={false} receive={false} />
+      {Array.from({ length: 11 }, (_, i) => (
+        <Block key={`z${i}`} position={[ROAD_X - 4.5 + i * 0.9, 0.12, 0]} size={[0.5, 0.02, 2.6]} color="#ffffff" cast={false} receive={false} />
       ))}
 
       {/* Road bridge deck so the water never shows through the tarmac */}
-      <Block position={[ROAD_X, 0.12, riverMid]} size={[5.2, 0.26, riverW + 1.6]} color="#55565e" cast={false} roughness={0.95} tex="asphalt" texScale={3} />
+      <Block position={[ROAD_X, 0.12, riverMid]} size={[ROAD_W + 0.2, 0.26, riverW + 1.6]} color="#55565e" cast={false} roughness={0.95} tex="asphalt" texScale={3} />
       {Array.from({ length: 5 }, (_, i) => (
         <Block key={i} position={[ROAD_X, 0.26, RIVER.z0 - 0.4 + i * 1.7]} size={[0.18, 0.02, 1.0]} color="#ffffff" cast={false} />
       ))}
       {/* Road bridge railings */}
-      {[ROAD_X - 2.6, ROAD_X + 2.6].map((x) => (
+      {[ROAD_X - HALF - 0.1, ROAD_X + HALF + 0.1].map((x) => (
         <Block key={x} position={[x, 0.45, riverMid]} size={[0.25, 0.8, riverW + 1.5]} color="#cbd5e1" />
       ))}
 

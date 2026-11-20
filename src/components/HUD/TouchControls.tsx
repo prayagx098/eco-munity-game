@@ -3,7 +3,7 @@ import { keys, touchInput } from '../../state/sceneRegistry'
 
 /**
  * Mobile Touch Controls:
- *  - Left: 360° Analog Virtual Joystick (walk / sprint at max deflection / vehicle steering)
+ *  - Left: floating joystick – touch anywhere in the left zone and drag (walk / sprint / vehicle steering)
  *  - Right: Jump / Bunny-Hop Button (🦘) placed comfortably under the right thumb
  *  - Screen: Direct touch swiping anywhere on screen orbits the 3D camera
  *  - Actions: E, Q, Chat appear dynamically in the center InteractPrompt
@@ -11,10 +11,11 @@ import { keys, touchInput } from '../../state/sceneRegistry'
 export function TouchControls() {
   const [touch, setTouch] = useState(false)
 
-  // Move joystick local state
-  const leftBaseRef = useRef<HTMLDivElement>(null)
-  const [leftKnob, setLeftKnob] = useState({ x: 0, y: 0, active: false })
+  // Floating joystick: the stick appears wherever the left thumb lands and follows if you drag past its edge
+  const [stick, setStick] = useState<{ cx: number; cy: number; kx: number; ky: number } | null>(null)
+  const origin = useRef({ x: 0, y: 0 })
   const leftPointerId = useRef<number | null>(null)
+  const MAX_R = 46
 
   useEffect(() => {
     const isTouch =
@@ -30,50 +31,46 @@ export function TouchControls() {
 
   if (!touch) return null
 
-  /* ---------------- Left Move Joystick Handlers ---------------- */
-  const handleLeftDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    leftPointerId.current = e.pointerId
-    e.currentTarget.setPointerCapture(e.pointerId)
-    updateLeft(e.clientX, e.clientY)
-  }
-
-  const handleLeftMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (leftPointerId.current !== e.pointerId) return
-    updateLeft(e.clientX, e.clientY)
-  }
-
-  const updateLeft = (clientX: number, clientY: number) => {
-    const base = leftBaseRef.current
-    if (!base) return
-    const rect = base.getBoundingClientRect()
-    const centerX = rect.left + rect.width / 2
-    const centerY = rect.top + rect.height / 2
-    const rawDx = clientX - centerX
-    const rawDy = clientY - centerY
-    const dist = Math.hypot(rawDx, rawDy)
-    const maxR = 40
-    const clampedDist = Math.min(dist, maxR)
-    const angle = Math.atan2(rawDy, rawDx)
-    const kx = Math.cos(angle) * clampedDist
-    const ky = Math.sin(angle) * clampedDist
-
-    setLeftKnob({ x: kx, y: ky, active: true })
-
-    const deadzone = 5
-    if (dist < deadzone) {
+  /* ---------------- Floating joystick handlers ---------------- */
+  const apply = (clientX: number, clientY: number) => {
+    let dx = clientX - origin.current.x
+    let dy = clientY - origin.current.y
+    const dist = Math.hypot(dx, dy)
+    if (dist > MAX_R) {
+      // drag the whole stick along so the thumb never runs out of room
+      const over = dist - MAX_R
+      origin.current.x += (dx / dist) * over
+      origin.current.y += (dy / dist) * over
+      dx = clientX - origin.current.x
+      dy = clientY - origin.current.y
+    }
+    const d = Math.min(Math.hypot(dx, dy), MAX_R)
+    const angle = Math.atan2(dy, dx)
+    setStick({ cx: origin.current.x, cy: origin.current.y, kx: Math.cos(angle) * d, ky: Math.sin(angle) * d })
+    if (d < 6) {
       touchInput.moveX = 0
       touchInput.moveY = 0
       touchInput.moveActive = false
     } else {
-      const norm = clampedDist / maxR
+      const norm = d / MAX_R
       touchInput.moveX = Math.cos(angle) * norm
-      touchInput.moveY = -Math.sin(angle) * norm // screen Y is inverted relative to forward Z
+      touchInput.moveY = -Math.sin(angle) * norm
       touchInput.moveActive = true
     }
   }
 
-  const handleLeftUp = (e: React.PointerEvent<HTMLDivElement>) => {
+  const handleDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (leftPointerId.current !== null) return
+    e.preventDefault()
+    leftPointerId.current = e.pointerId
+    e.currentTarget.setPointerCapture(e.pointerId)
+    origin.current = { x: e.clientX, y: e.clientY }
+    apply(e.clientX, e.clientY)
+  }
+  const handleMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (leftPointerId.current === e.pointerId) apply(e.clientX, e.clientY)
+  }
+  const handleUp = (e: React.PointerEvent<HTMLDivElement>) => {
     if (leftPointerId.current !== e.pointerId) return
     leftPointerId.current = null
     try {
@@ -81,7 +78,7 @@ export function TouchControls() {
     } catch {
       // ignore
     }
-    setLeftKnob({ x: 0, y: 0, active: false })
+    setStick(null)
     touchInput.moveX = 0
     touchInput.moveY = 0
     touchInput.moveActive = false
@@ -89,36 +86,29 @@ export function TouchControls() {
 
   return (
     <>
-      {/* 1. LEFT VIRTUAL JOYSTICK (Movement) */}
-      <div className="pointer-events-auto fixed bottom-5 left-5 sm:bottom-6 sm:left-6 z-30 select-none touch-none">
-        <div
-          ref={leftBaseRef}
-          onPointerDown={handleLeftDown}
-          onPointerMove={handleLeftMove}
-          onPointerUp={handleLeftUp}
-          onPointerCancel={handleLeftUp}
-          className={`relative flex h-24 w-24 sm:h-28 sm:w-28 items-center justify-center rounded-full border-2 transition-colors ${
-            leftKnob.active ? 'border-cyan-400/80 bg-slate-900/50 shadow-[0_0_20px_rgba(34,211,238,0.35)]' : 'border-white/30 bg-slate-900/35'
-          } backdrop-blur-md shadow-2xl`}
-        >
-          {/* Subtle directional tick marks */}
-          <div className="absolute top-1.5 h-1.5 w-0.5 rounded-full bg-white/40" />
-          <div className="absolute bottom-1.5 h-1.5 w-0.5 rounded-full bg-white/40" />
-          <div className="absolute left-1.5 h-0.5 w-1.5 rounded-full bg-white/40" />
-          <div className="absolute right-1.5 h-0.5 w-1.5 rounded-full bg-white/40" />
-
-          {/* Movable Thumbstick Knob */}
-          <div
-            className="absolute flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-full border-2 border-white/70 bg-gradient-to-tr from-cyan-500 to-emerald-400 text-white shadow-xl"
-            style={{
-              transform: `translate3d(${leftKnob.x}px, ${leftKnob.y}px, 0)`,
-              transition: leftKnob.active ? 'none' : 'transform 0.18s cubic-bezier(0.2, 0.9, 0.3, 1)',
-            }}
-          >
-            <div className="h-2.5 w-2.5 rounded-full bg-white/80 shadow-sm" />
+      {/* 1. LEFT-SIDE TOUCH ZONE: touch anywhere here and drag to move */}
+      <div
+        onPointerDown={handleDown}
+        onPointerMove={handleMove}
+        onPointerUp={handleUp}
+        onPointerCancel={handleUp}
+        className="pointer-events-auto fixed bottom-0 left-0 z-20 h-[68%] w-[46%] select-none touch-none"
+      >
+        {!stick && (
+          <div className="pointer-events-none absolute bottom-6 left-6 flex h-20 w-20 items-center justify-center rounded-full border-2 border-dashed border-white/25 text-[10px] font-semibold uppercase tracking-wide text-white/40">
+            move
           </div>
-        </div>
+        )}
       </div>
+      {stick && (
+        <div className="pointer-events-none fixed z-30" style={{ left: stick.cx, top: stick.cy }}>
+          <div className="absolute h-[104px] w-[104px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-cyan-300/70 bg-slate-900/40 shadow-[0_0_20px_rgba(34,211,238,0.35)] backdrop-blur-md" />
+          <div
+            className="absolute h-12 w-12 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/80 bg-gradient-to-tr from-cyan-500 to-emerald-400 shadow-xl"
+            style={{ transform: `translate3d(${stick.kx}px, ${stick.ky}px, 0) translate(-50%, -50%)` }}
+          />
+        </div>
+      )}
 
       {/* 2. JUMP BUTTON (Bottom-Right, where right thumb naturally rests) */}
       <div className="pointer-events-auto fixed bottom-5 right-5 sm:bottom-6 sm:right-6 z-30 select-none">

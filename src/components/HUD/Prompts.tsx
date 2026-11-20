@@ -4,6 +4,7 @@ import { useGame, clockLabel, dayPhase, isNight } from '../../state/gameStore'
 import { TRASH_BY_ID } from '../../state/gameData'
 import { SCHOOL_NAME, ZONES } from '../../state/world'
 import { useSettings } from '../../state/settings'
+import { player } from '../../state/sceneRegistry'
 
 function Key({ k }: { k: string }) {
   return <kbd className="inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-white/90 px-1.5 text-xs font-bold text-slate-900">{k}</kbd>
@@ -21,6 +22,12 @@ export function InteractPrompt() {
   const drop = useGame((s) => s.dropCarried)
 
   const type = carrying?.kind === 'trash' ? TRASH_BY_ID[carrying.typeId] : null
+  // player.vehicle lives outside React, so watch it lightly to show a tap-able "get off" button
+  const [riding, setRiding] = useState<string | null>(player.vehicle)
+  useEffect(() => {
+    const t = setInterval(() => setRiding((r) => (r === player.vehicle ? r : player.vehicle)), 150)
+    return () => clearInterval(t)
+  }, [])
 
   return (
     <div className="flex flex-col items-center gap-2">
@@ -33,7 +40,14 @@ export function InteractPrompt() {
       </AnimatePresence>
       <div className="flex flex-wrap justify-center gap-2">
         <AnimatePresence mode="popLayout">
-          {nearby && (
+          {riding && (
+            <motion.button key="dismount" initial={{ opacity: 0, scale: 0.8, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.8 }} onClick={interact} className="glass pointer-events-auto flex items-center gap-2 px-4 py-2.5 text-sm font-semibold hover:bg-white/10">
+              <Key k="E" />
+              <span className="mr-1 text-xl">🚶</span>
+              Get off
+            </motion.button>
+          )}
+          {nearby && !riding && (
             <motion.button
               key={nearby.key}
               initial={{ opacity: 0, scale: 0.8, y: 10 }}
