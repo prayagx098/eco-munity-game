@@ -123,7 +123,7 @@ async function authCall(path: 'register' | 'login', body: Record<string, unknown
   }
 }
 
-export const useAuth = create<AuthState>()((set, get) => ({
+export const useAuth = create<AuthState>()((set) => ({
   status: readToken() ? 'checking' : 'out',
   user: null,
   token: readToken(),

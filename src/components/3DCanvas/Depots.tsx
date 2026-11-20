@@ -5,7 +5,7 @@ import type { Mesh } from 'three'
 import { useGame } from '../../state/gameStore'
 import { depot } from '../../state/sceneRegistry'
 import { BIN_CAP, ECO_HUB } from '../../state/world'
-import { Block, Plastic, Sign3D, sharedMaterials } from './primitives'
+import { Block, Plastic, Sign3D } from './primitives'
 
 
 /** A column of smoke puffs that rise and fade. `rate` can change from frame to frame (busy machines smoke more). */
