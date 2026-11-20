@@ -1,5 +1,5 @@
 /** The shop catalogue: clothes, shoes, hats and more you buy with coins earned by finishing tasks. */
-export type Cat = 'shirt' | 'pants' | 'shoes' | 'hair' | 'hat' | 'glasses' | 'back'
+export type Cat = 'shirt' | 'pants' | 'shoes' | 'hair' | 'hat' | 'glasses' | 'back' | 'vehicle'
 
 export interface Item {
   id: string
@@ -29,6 +29,7 @@ export const CATS: { id: Cat; name: string; icon: string }[] = [
   { id: 'hat', name: 'Hats', icon: '🧢' },
   { id: 'glasses', name: 'Glasses', icon: '🕶️' },
   { id: 'back', name: 'Back', icon: '🎒' },
+  { id: 'vehicle', name: 'Rides', icon: '🚲' },
 ]
 
 export const ITEMS: Item[] = [
@@ -94,6 +95,10 @@ export const ITEMS: Item[] = [
   { id: 'back-cape-red', cat: 'back', name: 'Red cape', price: 70, icon: '🦸', color: '#dc2626', style: 'cape' },
   { id: 'back-cape-blue', cat: 'back', name: 'Blue cape', price: 70, icon: '🦸', color: '#2563eb', style: 'cape' },
   { id: 'back-wings', cat: 'back', name: 'Angel wings', price: 120, icon: '🪽', color: '#ffffff', style: 'wings' },
+  // rides
+  { id: 'veh-bike', cat: 'vehicle', name: 'Personal Solar Cycle', price: 60, icon: '🚲', color: '#0ea5e9' },
+  { id: 'veh-scooter', cat: 'vehicle', name: 'Personal Solar Scooter', price: 75, icon: '🛴', color: '#0284c7' },
+  { id: 'veh-board', cat: 'vehicle', name: 'Personal Eco Skateboard', price: 50, icon: '🛹', color: '#10b981' },
 ]
 
 export const ITEM_BY_ID: Record<string, Item> = Object.fromEntries(ITEMS.map((i) => [i.id, i]))

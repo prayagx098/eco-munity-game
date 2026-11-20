@@ -1221,6 +1221,12 @@ export const useGame = create<GameState>()((set, get) => {
       const wallet = { ...w, equipped: { ...w.equipped, [item.cat]: id } }
       saveWallet(wallet)
       set({ wallet })
+      if (item.cat === 'vehicle') {
+        const vkind = item.id.replace('veh-', '') as VehicleKind
+        player.vehicle = vkind
+        player.odo = 0
+        player.vspeed = 0
+      }
       get().applyOutfit()
       // a little twirl with sparkles so putting something on feels special
       dress.active = true
@@ -1235,6 +1241,9 @@ export const useGame = create<GameState>()((set, get) => {
       const wallet = { ...w, equipped }
       saveWallet(wallet)
       set({ wallet })
+      if (cat === 'vehicle') {
+        player.vehicle = null
+      }
       get().applyOutfit()
     },
     /** works out the character's look from the base colours plus what is equipped */
