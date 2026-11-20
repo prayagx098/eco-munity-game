@@ -32,6 +32,9 @@ export const ROADS_EW = [{ z: -47 }, { z: 48 }]
 export const ROAD_W = 8
 /** footpath each side of every road */
 export const WALK_W = 2
+/** x of the low wall just beyond the east footpath, and how far it stays clear of a cross road's centre */
+export const WALL_X = ROAD_X + ROAD_W / 2 + WALK_W + 0.3
+export const WALL_GAP = ROAD_W / 2 + WALK_W + 0.3
 /** distance from a road's centre line to the middle of each traffic lane */
 export const LANE_OFF = ROAD_W / 4
 export const JUNCTIONS = ROADS_EW.map((r) => ({ x: ROAD_X, z: r.z }))
@@ -659,17 +662,18 @@ export const OBSTACLE_RECTS: Rect[] = [
   ...GARDEN_PLOTS.map((p) => pad(p, 0.15)),
   ...FLOWER_BEDS.map((f) => rect(f.x, f.z, f.w, f.d)),
   // river (except bridges)
-  { x0: -WORLD_HALF, x1: -26.6, z0: RIVER.z0, z1: RIVER.z1 },
-  { x0: -21.4, x1: BRIDGE.x0, z0: RIVER.z0, z1: RIVER.z1 },
+  { x0: -WORLD_HALF, x1: ROAD_X - ROAD_W / 2 - 0.2, z0: RIVER.z0, z1: RIVER.z1 },
+  { x0: ROAD_X + ROAD_W / 2 + 0.2, x1: BRIDGE.x0, z0: RIVER.z0, z1: RIVER.z1 },
   { x0: BRIDGE.x1, x1: WORLD_HALF, z0: RIVER.z0, z1: RIVER.z1 },
   // the sea (except the pier)
   { x0: SEA.x0, x1: SEA.x1 + 5, z0: SEA.z0, z1: PIER.z0 },
   { x0: SEA.x0, x1: SEA.x1 + 5, z0: PIER.z1, z1: SEA.z1 },
   // low wall between road and town (gaps for the west path and the north road)
-  { x0: -20.8, x1: -20.2, z0: -WORLD_HALF, z1: -49.6 },
-  { x0: -20.8, x1: -20.2, z0: -44.4, z1: -27.8 },
-  { x0: -20.8, x1: -20.2, z0: -25.2, z1: -2 },
-  { x0: -20.8, x1: -20.2, z0: 2, z1: 28 },
+  // low wall east of the main road (gaps for the cross road, the Maple Street crossing and the truck road)
+  { x0: WALL_X - 0.2, x1: WALL_X + 0.2, z0: -WORLD_HALF, z1: ROADS_EW[0].z - WALL_GAP },
+  { x0: WALL_X - 0.2, x1: WALL_X + 0.2, z0: ROADS_EW[0].z + WALL_GAP, z1: -27.8 },
+  { x0: WALL_X - 0.2, x1: WALL_X + 0.2, z0: -25.2, z1: -2 },
+  { x0: WALL_X - 0.2, x1: WALL_X + 0.2, z0: 2, z1: 28 },
 ]
 
 /** Street lamps (also drawn by Town.tsx) */

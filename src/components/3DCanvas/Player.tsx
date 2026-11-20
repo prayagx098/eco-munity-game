@@ -269,6 +269,7 @@ export function Player() {
     }
     squash.current += (1 - squash.current) * Math.min(1, dt * 15)
     anim.current.jump = isGrounded.current ? 0 : Math.min(1, jumpY.current / 0.7)
+    anim.current.jumpVy = isGrounded.current ? 0 : jumpVy.current
 
     airborne.h = player.vehicle ? 0 : jumpY.current
     const gy = groundY(player.x, player.z)

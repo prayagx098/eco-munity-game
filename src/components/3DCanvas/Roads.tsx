@@ -64,6 +64,10 @@ function Junction({ x, z }: { x: number; z: number }) {
   return (
     <group position={[x, 0, z]}>
       <Block position={[0, 0.055, 0]} size={[w, 0.11, w + 0.4]} color="#55565e" cast={false} roughness={0.95} tex="asphalt" texScale={3} bump={0.8} />
+      {/* paved corners where the footpaths meet */}
+      {[-1, 1].flatMap((sx) => [-1, 1].map((sz) => (
+        <Block key={`${sx}${sz}`} position={[sx * (HALF + WALK_W / 2), 0.08, sz * (HALF + WALK_W / 2)]} size={[WALK_W, 0.16, WALK_W]} color="#d8d2c8" cast={false} tex="paving" texScale={1.4} />
+      )))}
       {/* stop lines: one per approaching lane */}
       <Block position={[-LANE_OFF, 0.125, -sl]} size={[LANE_OFF * 1.8, 0.02, 0.3]} color="#ffffff" cast={false} />
       <Block position={[LANE_OFF, 0.125, sl]} size={[LANE_OFF * 1.8, 0.02, 0.3]} color="#ffffff" cast={false} />

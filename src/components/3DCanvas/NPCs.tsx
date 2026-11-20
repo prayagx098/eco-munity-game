@@ -53,6 +53,8 @@ export interface MinifigAnim {
   act?: { kind: string; p: number } | null
   /** airborne jump / hop 0..1 */
   jump?: number
+  /** vertical speed while jumping (+ rising, − falling) so the pose can follow the arc */
+  jumpVy?: number
 }
 
 const ease = (p: number) => Math.sin(Math.PI * Math.min(1, Math.max(0, p)))
@@ -133,6 +135,8 @@ export function Minifig({ shirt, pants, hair, anim, longHair, shirt2, shirtId, p
   const blinkAt = useRef(1 + Math.random() * 3)
   const seed = useRef(Math.random() * 100)
   const blend = useRef({ lean: 0, aL: 0, aR: 0, w: 0 })
+  // smoothed jump pose so take-off, flight and landing flow into each other
+  const jp = useRef({ w: 0, legL: 0, legR: 0, aL: 0, aR: 0, az: 0, tilt: 0 })
 
   useFrame(({ clock }, dt) => {
     const a = anim.current
@@ -140,18 +144,37 @@ export function Minifig({ shirt, pants, hair, anim, longHair, shirt2, shirtId, p
     const swing = Math.sin(t * (a.speed > 1.2 ? 13 : 9)) * 0.7 * Math.min(1, a.speed)
     const phase = t + seed.current
     if (a.ride) {
-      // seated: knees forward, little pedalling
-      const pedal = Math.sin(t * 6) * 0.35 * Math.min(1, a.speed)
-      if (legL.current) legL.current.rotation.x = -1.15 + pedal
-      if (legR.current) legR.current.rotation.x = -1.15 - pedal
-    } else if (a.jump && a.jump > 0.08) {
-      // airborne jump pose: knees tucked back
-      const j = Math.min(1, a.jump)
-      if (legL.current) legL.current.rotation.x = -0.6 * j
-      if (legR.current) legR.current.rotation.x = -0.45 * j
+      // seated: knees forward, feet resting – no pedalling
+      if (legL.current) legL.current.rotation.x = -1.15
+      if (legR.current) legR.current.rotation.x = -1.15
     } else {
       if (legL.current) legL.current.rotation.x = swing
       if (legR.current) legR.current.rotation.x = -swing
+    }
+    // jump: rising = knees drawn up and arms swung overhead; falling = legs reach down, arms spread for balance
+    const J = jp.current
+    {
+      const airborne = !a.ride && (a.jump ?? 0) > 0.03
+      const vy = a.jumpVy ?? 0
+      const rising = vy > 0
+      const k = Math.min(1, dt * 16)
+      const tLegL = rising ? -1.0 : -0.3
+      const tLegR = rising ? -0.35 : 0.2
+      const tAL = rising ? -2.5 : -0.5
+      const tAR = rising ? -2.3 : -0.5
+      const tAZ = rising ? 0.18 : 0.75
+      const tTilt = rising ? 0.08 : -0.04
+      J.w += ((airborne ? 1 : 0) - J.w) * Math.min(1, dt * (airborne ? 20 : 12))
+      J.legL += (tLegL - J.legL) * k
+      J.legR += (tLegR - J.legR) * k
+      J.aL += (tAL - J.aL) * k
+      J.aR += (tAR - J.aR) * k
+      J.az += (tAZ - J.az) * k
+      J.tilt += (tTilt - J.tilt) * k
+      if (J.w > 0.01) {
+        if (legL.current) legL.current.rotation.x += (J.legL - legL.current.rotation.x) * J.w
+        if (legR.current) legR.current.rotation.x += (J.legR - legR.current.rotation.x) * J.w
+      }
     }
     // walking motion: bounce on each step, sway side to side, lean into a run
     if (root.current) {
@@ -185,8 +208,8 @@ export function Minifig({ shirt, pants, hair, anim, longHair, shirt2, shirtId, p
       head.current.rotation.y += (want - head.current.rotation.y) * Math.min(1, dt * 6)
     }
     // base pose (walking / carrying / waving / jumping)
-    let aL = a.ride ? -0.95 : a.armsUp ? -Math.PI * 0.45 : a.jump && a.jump > 0.08 ? -0.45 : -swing * 0.8
-    let aR = a.ride ? -0.95 : a.armsUp ? -Math.PI * 0.45 : a.wave ? -Math.PI * 0.8 + Math.sin(t * 10) * 0.3 : a.jump && a.jump > 0.08 ? -0.45 : swing * 0.8
+    let aL = a.ride ? -0.95 : a.armsUp ? -Math.PI * 0.45 : -swing * 0.8
+    let aR = a.ride ? -0.95 : a.armsUp ? -Math.PI * 0.45 : a.wave ? -Math.PI * 0.8 + Math.sin(t * 10) * 0.3 : swing * 0.8
     let lean = 0
     let nod = 0
     if (a.talk && !a.act) {
@@ -206,14 +229,17 @@ export function Minifig({ shirt, pants, hair, anim, longHair, shirt2, shirtId, p
     }
     aL += (b.aL - aL) * b.w
     aR += (b.aR - aR) * b.w
+    aL += (J.aL - aL) * J.w
+    aR += (J.aR - aR) * J.w
+    lean += J.tilt * J.w
     lean += (b.lean - lean) * b.w
     if (armL.current) {
       armL.current.rotation.x = aL
-      armL.current.rotation.z = a.jump && a.jump > 0.08 && !a.ride ? 0.32 * Math.min(1, a.jump) : 0
+      armL.current.rotation.z = J.az * J.w
     }
     if (armR.current) {
       armR.current.rotation.x = aR
-      armR.current.rotation.z = a.jump && a.jump > 0.08 && !a.ride ? -0.32 * Math.min(1, a.jump) : 0
+      armR.current.rotation.z = -J.az * J.w
     }
     if (upper.current) upper.current.rotation.x = lean + nod
   })

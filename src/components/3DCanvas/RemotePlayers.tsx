@@ -44,7 +44,9 @@ function RemotePlayer({ id, profile }: { id: string; profile: Profile }) {
     dh = Math.atan2(Math.sin(dh), Math.cos(dh))
     p.h += dh * k
     // jump height arrives 10×/s, so ease towards it quickly (and drop faster than it rises)
+    const prevJ = jumpY.current
     jumpY.current += ((r.jump ?? 0) - jumpY.current) * (1 - Math.exp(-dt * 22))
+    anim.current.jumpVy = (jumpY.current - prevJ) / Math.max(dt, 1e-3)
     g.position.set(p.x, 0.06 + groundY(p.x, p.z) + jumpY.current, p.z)
     g.rotation.y = p.h
     anim.current.speed += ((r.moving ? (r.running ? 1.6 : 1) : 0) - anim.current.speed) * Math.min(1, dt * 10)

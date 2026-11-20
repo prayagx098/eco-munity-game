@@ -1,18 +1,17 @@
 import { Block } from './primitives'
 import { Pond, River } from './Nature'
-import { BRIDGE, PATHS, RIVER, ROADS_EW, ROAD_W, ROAD_X, WALK_W, WORLD_HALF } from '../../state/world'
+import { BRIDGE, PATHS, RIVER, ROADS_EW, ROAD_W, ROAD_X, WALK_W, WALL_GAP, WALL_X, WORLD_HALF } from '../../state/world'
 
 const GRASS = '#7ccf4a'
 const PAVING = '#d9d5dc'
 const SAND = '#f2dc9b'
 const SIZE = WORLD_HALF * 2 + 2
 const HALF = ROAD_W / 2
-const WALL_X = ROAD_X + HALF + WALK_W + 0.3
 
 /** Grass, road, river, pond, bridges, paths and the low town wall */
 export function Ground() {
   const lanes = Array.from({ length: Math.ceil((WORLD_HALF * 2) / 3) + 1 }, (_, i) => -WORLD_HALF + i * 3)
-  const pillars = Array.from({ length: Math.ceil((WORLD_HALF * 2) / 3) }, (_, i) => -WORLD_HALF + 1 + i * 3).filter((z) => (z < -2 || z > 2) && z < RIVER.z0 - 1 && ROADS_EW.every((r) => Math.abs(z - r.z) > HALF + 0.9))
+  const pillars = Array.from({ length: Math.ceil((WORLD_HALF * 2) / 3) }, (_, i) => -WORLD_HALF + 1 + i * 3).filter((z) => (z < -2 || z > 2) && (z < -27.8 || z > -25.2) && z < RIVER.z0 - 1 && ROADS_EW.every((r) => Math.abs(z - r.z) > WALL_GAP + 0.4))
   // side pavements of the main road stop where the cross roads begin
   const edges = ROADS_EW.flatMap((r) => [r.z - HALF - WALK_W, r.z + HALF + WALK_W])
   const sideSegs: [number, number][] = [[-WORLD_HALF - 1, edges[0]], [edges[1], edges[2]], [edges[3], WORLD_HALF + 1]]
@@ -40,8 +39,9 @@ export function Ground() {
 
       {/* Low wall + railing between road and town */}
       {[
-        [-WORLD_HALF, ROADS_EW[0].z - 3.2],
-        [ROADS_EW[0].z + 3.2, -2],
+        [-WORLD_HALF, ROADS_EW[0].z - WALL_GAP],
+        [ROADS_EW[0].z + WALL_GAP, -27.8],
+        [-25.2, -2],
         [2, RIVER.z0 - 1.5],
       ].map(([a, b]) => (
         <group key={a}>
