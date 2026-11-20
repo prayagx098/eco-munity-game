@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import type { Group } from 'three'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useGame } from '../../state/gameStore'
-import { act, hostNpcs, npcPositions, player } from '../../state/sceneRegistry'
+import { act, hostNpcs, lastBellRing, npcPositions, player } from '../../state/sceneRegistry'
 import { bridge } from '../../state/netBridge'
 import { NAV_NEIGHBOURS, NAV_NODES, STATIC_NPCS, groundY } from '../../state/world'
 import { Label, Near, Plastic } from './primitives'
@@ -102,10 +102,11 @@ interface MinifigProps {
   hat?: string
   glasses?: string
   back?: string
+  bandana?: 'red' | 'blue' | null
 }
 
 /** LEGO-style minifigure with swinging arms and legs */
-export function Minifig({ shirt, pants, hair, anim, longHair, shirt2, shirtId, pantsId, pattern, shoes, hat, glasses, back }: MinifigProps) {
+export function Minifig({ shirt, pants, hair, anim, longHair, shirt2, shirtId, pantsId, pattern, shoes, hat, glasses, back, bandana }: MinifigProps) {
   const shirtItem = shirtId ? ITEM_BY_ID[shirtId] : undefined
   const pantsItem = pantsId ? ITEM_BY_ID[pantsId] : undefined
   const shirtKind = shirtItem?.fabric ?? 'cotton'
@@ -533,6 +534,20 @@ export function Minifig({ shirt, pants, hair, anim, longHair, shirt2, shirtId, p
               </mesh>
               {glassItem && <GlassesMesh style={glassItem.style!} color={glassItem.color!} />}
               {hatItem && <HatMesh style={hatItem.style!} color={hatItem.color!} />}
+              {bandana && (
+                <group position={[0, 1.25, 0]}>
+                  {/* Forehead Bandana Wrap */}
+                  <mesh position={[0, 0, 0.02]}>
+                    <boxGeometry args={[0.43, 0.08, 0.43]} />
+                    <meshStandardMaterial color={bandana === 'red' ? '#ef4444' : '#3b82f6'} roughness={0.6} />
+                  </mesh>
+                  {/* Bandana Knot / Ribbon on Back */}
+                  <mesh position={[0, -0.02, -0.22]} rotation={[0.2, 0, 0]}>
+                    <boxGeometry args={[0.08, 0.12, 0.04]} />
+                    <meshStandardMaterial color={bandana === 'red' ? '#dc2626' : '#2563eb'} roughness={0.6} />
+                  </mesh>
+                </group>
+              )}
               {/* sideburns */}
               {[-1, 1].map((sd) => (
                 <RoundedBox key={`s${sd}`} args={[0.04, longHair ? 0.4 : 0.11, 0.2]} radius={0.015} smoothness={2} position={[sd * 0.205, longHair ? 1.14 : 1.25, -0.02]}>
@@ -883,6 +898,10 @@ function Villager({ id, name, shirt, pants, hair, node, longHair }: VillagerProp
     if (gr.t <= 0 && gr.cool <= 0 && faceToFace(g, n.x, n.z)) {
       gr.t = 2.2
       gr.cool = 10 + Math.random() * 6
+    }
+    // Bicycle bell ring: nearby NPCs cheerfully wave and look
+    if (Date.now() - lastBellRing.time < 1200 && Math.hypot(n.x - lastBellRing.x, n.z - lastBellRing.z) < 8.5) {
+      gr.t = 2.4
     }
     const hp = bridge.isHost ? undefined : hostNpcs.get(id)
     if (hp) {

@@ -6,7 +6,7 @@ import { useGame } from '../../state/gameStore'
 import { BIN_CAP, BIN_SLOTS, BIN_STATIONS } from '../../state/world'
 import { Label, Near, Plastic } from './primitives'
 import { useSettings } from '../../state/settings'
-import { binLift } from '../../state/sceneRegistry'
+import { binLift, binSparkleState, wobbleBinState } from '../../state/sceneRegistry'
 
 const LETTER = { compost: 'C', recycle: 'R', trash: 'T' } as const
 
@@ -53,6 +53,7 @@ function Bin({ slot }: { slot: Slot }) {
   // Grow + glow + wobble when you're carrying litter and standing at this bin
   const holder = useRef<Group>(null)
   const [lifted, setLifted] = useState(false)
+  const [sparkle, setSparkle] = useState(0)
   useFrame((state, dt) => {
     const l = !!binLift[slot.id]
     if (holder.current) holder.current.visible = !l
@@ -60,13 +61,25 @@ function Bin({ slot }: { slot: Slot }) {
     const s = useGame.getState()
     const target = s.nearby?.kind === 'bin' && s.nearby.targetId === slot.id
     const carrying = s.carrying?.kind === 'trash'
+
+    const isWobbling = wobbleBinState.slotId === slot.id && Date.now() - wobbleBinState.time < 800
+    const wobbleProgress = isWobbling ? (Date.now() - wobbleBinState.time) / 800 : 0
+    const wobbleRot = isWobbling ? Math.sin(wobbleProgress * Math.PI * 7) * (1 - wobbleProgress) * 0.22 : 0
+
+    const isSparkling = binSparkleState.slotId === slot.id && Date.now() - binSparkleState.time < 1200
+    if (isSparkling) {
+      setSparkle((Date.now() - binSparkleState.time) / 1200)
+    } else if (sparkle > 0) {
+      setSparkle(0)
+    }
+
     if (group.current) {
       const cur = group.current.scale.x
       const next = cur + ((target ? 1.15 : 1) - cur) * Math.min(1, dt * 12)
       group.current.scale.setScalar(next)
-      group.current.rotation.z = target && !useSettings.getState().access.reducedMotion ? Math.sin(state.clock.elapsedTime * 14) * 0.03 : 0
+      group.current.rotation.z = (target && !useSettings.getState().access.reducedMotion ? Math.sin(state.clock.elapsedTime * 14) * 0.03 : 0) + wobbleRot
     }
-    if (glow.current) glow.current.emissiveIntensity = target ? 0.5 : carrying ? 0.12 : 0
+    if (glow.current) glow.current.emissiveIntensity = isWobbling ? 0.8 : target ? 0.5 : carrying ? 0.12 : 0
     if (beacon.current) beacon.current.emissiveIntensity = full && Math.floor(state.clock.elapsedTime * 3) % 2 ? 2.5 : 0.2
   })
 
@@ -90,6 +103,23 @@ function Bin({ slot }: { slot: Slot }) {
         {colorblind && (
           <group position={[0, 0.85, 0.56]} rotation={[-0.08, 0, 0]}>
             <BinSymbol kind={slot.kind} />
+          </group>
+        )}
+        {/* Sparkle burst on successful sort */}
+        {sparkle > 0 && (
+          <group position={[0, 1.7, 0]}>
+            {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+              const a = (i * Math.PI * 2) / 8
+              const dist = 0.2 + sparkle * 0.8
+              const y = sparkle * 1.4
+              const sz = Math.max(0.01, 0.08 * (1 - sparkle))
+              return (
+                <mesh key={i} position={[Math.cos(a) * dist, y, Math.sin(a) * dist]}>
+                  <octahedronGeometry args={[sz, 0]} />
+                  <meshBasicMaterial color={i % 2 === 0 ? '#4ade80' : '#facc15'} />
+                </mesh>
+              )
+            })}
           </group>
         )}
         {/* fill gauge on the front: one light per item inside */}

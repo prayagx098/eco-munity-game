@@ -117,21 +117,41 @@ function FootballScoreboard() {
   const match = useGame((s) => s.footballMatch)
   const red = match?.red ?? 0
   const blue = match?.blue ?? 0
+  const timeLeft = Math.max(0, Math.floor(match?.timeLeft ?? 120))
+  const minutes = Math.floor(timeLeft / 60)
+  const seconds = timeLeft % 60
+  const timeStr = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+  const celebration = match?.celebration
+
+  useFrame((_, dt) => {
+    useGame.getState().tickFootballTimer(dt)
+  })
+
   const cx = -46.5
   const cz = 10.9
   return (
-    <group position={[cx, 3.4, cz]} rotation={[0, Math.PI, 0]}>
-      <Block position={[0, 0, 0]} size={[4.8, 1.5, 0.2]} color="#090d16" />
-      <Block position={[0, 0, 0.1]} size={[4.5, 1.25, 0.04]} color="#030712" />
-      <Block position={[0, 0.72, 0.05]} size={[4.8, 0.12, 0.22]} color="#eab308" />
+    <group position={[cx, 3.8, cz]} rotation={[0, Math.PI, 0]}>
+      <Block position={[0, 0, 0]} size={[5.2, 1.8, 0.2]} color="#090d16" />
+      <Block position={[0, 0, 0.1]} size={[4.9, 1.55, 0.04]} color="#030712" />
+      <Block position={[0, 0.88, 0.05]} size={[5.2, 0.14, 0.22]} color="#eab308" />
       <Label position={[0, 0, 0.16]}>
-        <div className="flex flex-col items-center justify-center rounded-lg border-2 border-amber-400 bg-slate-950/95 px-4 py-1.5 shadow-[0_0_20px_rgba(245,158,11,0.5)]">
-          <div className="text-[10px] font-black tracking-widest text-amber-400">⚽ CLASSROOM DERBY ⚽</div>
-          <div className="flex items-center gap-3 font-mono text-base font-black">
-            <span className="text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.9)]">RED {red}</span>
-            <span className="text-slate-500">:</span>
-            <span className="text-blue-400 drop-shadow-[0_0_10px_rgba(59,130,246,0.9)]">{blue} BLUE</span>
+        <div className="flex min-w-[220px] flex-col items-center justify-center rounded-xl border-2 border-amber-400 bg-slate-950/95 px-4 py-2 shadow-[0_0_25px_rgba(245,158,11,0.6)]">
+          <div className="flex w-full items-center justify-between gap-4 border-b border-white/10 pb-1 text-[11px] font-black tracking-widest text-amber-400">
+            <span>⚽ DERBY</span>
+            <span className="font-mono text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]">⏱️ {timeStr}</span>
+            <span>MATCH</span>
           </div>
+          {celebration ? (
+            <div className={`my-1 animate-bounce text-sm font-black tracking-wider ${celebration === 'red' ? 'text-red-500 drop-shadow-[0_0_12px_rgba(239,68,68,0.9)]' : 'text-blue-400 drop-shadow-[0_0_12px_rgba(59,130,246,0.9)]'}`}>
+              🎉 GOAL FOR {celebration.toUpperCase()}! 🎉
+            </div>
+          ) : (
+            <div className="flex items-center gap-4 pt-1 font-mono text-lg font-black">
+              <span className="text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.9)]">RED {red}</span>
+              <span className="text-slate-500">:</span>
+              <span className="text-blue-400 drop-shadow-[0_0_10px_rgba(59,130,246,0.9)]">{blue} BLUE</span>
+            </div>
+          )}
         </div>
       </Label>
     </group>

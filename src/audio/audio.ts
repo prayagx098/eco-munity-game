@@ -30,6 +30,13 @@ export type SfxName =
   | 'step'
   | 'quack'
   | 'jump'
+  | 'bike-bell'
+  | 'buzzer'
+  | 'pop'
+  | 'whistle'
+  | 'cheer'
+  | 'bark'
+  | 'splash'
 
 export interface Volumes {
   master: number
@@ -262,6 +269,52 @@ export function sfx(name: SfxName) {
     case 'jump':
       tone(NOTE(65), 0.14, { gain: 0.09, type: 'triangle', slide: NOTE(76) })
       break
+    case 'bike-bell':
+      // Two crisp metallic bell strikes ("Ding! Ding!") with bright natural decay
+      tone(2093, 0.45, { gain: 0.11, attack: 0.003 })
+      tone(4186, 0.22, { gain: 0.04, attack: 0.003 })
+      tone(2637, 0.55, { gain: 0.12, when: 0.14, attack: 0.003 })
+      tone(5274, 0.25, { gain: 0.045, when: 0.14, attack: 0.003 })
+      break
+    case 'buzzer':
+      // Soft, humorous "uh-oh" buzzer - gentle, cartoonish, not grating
+      tone(165, 0.18, { gain: 0.08, type: 'sawtooth', slide: 140 })
+      tone(125, 0.24, { gain: 0.07, type: 'sawtooth', slide: 110, when: 0.16 })
+      break
+    case 'pop':
+      // Satisfying snappy bubble / cork pop
+      tone(320, 0.08, { gain: 0.14, type: 'sine', slide: 880, attack: 0.002 })
+      noise(0.04, { freq: 1200, gain: 0.06 })
+      break
+    case 'whistle':
+      // High-energy referee whistle with rapid flutter
+      for (let i = 0; i < 4; i++) {
+        tone(2800, 0.09, { gain: 0.08, when: i * 0.035, type: 'triangle' })
+        tone(3150, 0.09, { gain: 0.07, when: i * 0.035, type: 'sine' })
+      }
+      tone(2950, 0.35, { gain: 0.09, when: 0.16, type: 'triangle' })
+      tone(3300, 0.35, { gain: 0.08, when: 0.16, type: 'sine' })
+      break
+    case 'cheer':
+      // Crowd cheering & stadium roar with celebratory swell
+      noise(1.8, { type: 'bandpass', freq: 900, sweep: 1400, q: 0.9, gain: 0.22, out: sfxBus })
+      ;[72, 76, 79, 84, 88].forEach((n, i) => {
+        tone(NOTE(n), 0.6, { gain: 0.035, when: 0.2 + i * 0.08, attack: 0.05, slide: NOTE(n + 2) })
+      })
+      break
+    case 'bark':
+      // Playful dog double bark ("Woof! Woof!")
+      tone(440, 0.11, { gain: 0.09, type: 'triangle', slide: 220, attack: 0.01 })
+      noise(0.08, { freq: 650, gain: 0.05 })
+      tone(480, 0.13, { gain: 0.085, type: 'triangle', slide: 240, when: 0.16, attack: 0.01 })
+      noise(0.09, { freq: 650, gain: 0.045, when: 0.16 })
+      break
+    case 'splash':
+      // Water droplet splash & ripple
+      noise(0.25, { type: 'bandpass', freq: 800, sweep: 1600, q: 1.4, gain: 0.12 })
+      tone(1200, 0.08, { gain: 0.04, slide: 600 })
+      tone(1500, 0.06, { gain: 0.035, when: 0.05, slide: 800 })
+      break
   }
 }
 
@@ -270,6 +323,9 @@ export function sfx(name: SfxName) {
 /* ------------------------------------------------------------------ */
 
 let nextBird = 0
+let nextOwl = 0
+let nextCricket = 0
+
 /** Called a few times a second with what's around the player */
 export function updateAmbience(p: { wind: number; rain: number; night: number; water: number }) {
   if (!ctx || ctx.state !== 'running') return
@@ -282,30 +338,52 @@ export function updateAmbience(p: { wind: number; rain: number; night: number; w
   rainGain.gain.setTargetAtTime(p.rain * 0.16, t, 1.5)
   waterGain.gain.setTargetAtTime(p.water * 0.07, t, 1)
 
-  // a rare, soft bird call on calm days (never at night or in rain)
-  if (t > nextBird) {
-    nextBird = t + 14 + Math.random() * 18
-    if (p.night < 0.3 && p.rain < 0.2 && p.wind < 0.5) {
-      const base = NOTE(88 + Math.floor(Math.random() * 3) * 2)
-      tone(base, 0.18, { gain: 0.018, slide: base * 1.12, out: ambBus, attack: 0.03 })
-      tone(base * 1.12, 0.22, { gain: 0.015, slide: base, when: 0.22, out: ambBus, attack: 0.03 })
+  // Daytime: cheerful birds chirping on calm days
+  if (p.night < 0.4 && p.rain < 0.2 && p.wind < 0.5) {
+    if (t > nextBird) {
+      nextBird = t + 10 + Math.random() * 14
+      const base = NOTE(86 + Math.floor(Math.random() * 4) * 2)
+      tone(base, 0.15, { gain: 0.02, slide: base * 1.15, out: ambBus, attack: 0.02 })
+      tone(base * 1.15, 0.18, { gain: 0.018, slide: base, when: 0.16, out: ambBus, attack: 0.02 })
+      if (Math.random() < 0.5) {
+        tone(base * 1.25, 0.12, { gain: 0.015, slide: base * 1.05, when: 0.36, out: ambBus, attack: 0.01 })
+      }
+    }
+  }
+
+  // Nighttime: crickets chirping and gentle owl hoots
+  if (p.night >= 0.4 && p.rain < 0.3) {
+    // Crickets: rhythmic subtle high-pitch chirp
+    if (t > nextCricket) {
+      nextCricket = t + 1.2 + Math.random() * 2.2
+      for (let i = 0; i < 3; i++) {
+        tone(4600 + Math.random() * 200, 0.04, { gain: 0.007, when: i * 0.05, type: 'triangle', out: ambBus })
+      }
+    }
+    // Owl: distant gentle double-hoot ("Hoo... Hoo-hoo!")
+    if (t > nextOwl) {
+      nextOwl = t + 18 + Math.random() * 24
+      tone(392, 0.38, { gain: 0.018, type: 'sine', slide: 360, attack: 0.06, out: ambBus })
+      tone(370, 0.42, { gain: 0.016, type: 'sine', slide: 330, when: 0.55, attack: 0.06, out: ambBus })
     }
   }
 }
 
 /* ------------------------------------------------------------------ */
-/* Gentle background music                                              */
+/* Gentle background music (Lofi Chill / Animal Crossing Vibe)         */
 /* ------------------------------------------------------------------ */
 
 let musicNight = 0
 export const setMusicMood = (night: number) => (musicNight = night)
 
-// I – vi – IV – V in C, voiced softly
+// Warm jazz/lofi 7th chords: Cmaj7 - Am7 - Dm7 - G7sus4 - Fmaj7 - Em7
 const CHORDS = [
-  [48, 60, 64, 67],
-  [45, 57, 60, 64],
-  [41, 57, 60, 65],
-  [43, 55, 59, 62],
+  [48, 59, 64, 67, 71], // Cmaj7
+  [45, 57, 60, 64, 67], // Am7
+  [50, 57, 62, 65, 69], // Dm9
+  [43, 55, 60, 62, 67], // G7sus4
+  [41, 57, 60, 64, 69], // Fmaj7
+  [40, 55, 59, 64, 67], // Em7
 ]
 
 function startMusic() {
@@ -313,18 +391,26 @@ function startMusic() {
   let next = ctx!.currentTime + 1
   const tick = () => {
     if (!ctx) return
-    const beat = musicNight > 0.5 ? 0.9 : 0.7 // slow and relaxed
+    const beat = musicNight > 0.5 ? 0.95 : 0.78 // slow, cozy, and relaxed
     while (next < ctx.currentTime + 0.5) {
       const chord = CHORDS[bar % CHORDS.length]
       const when = next - ctx.currentTime
-      // soft pad
-      chord.forEach((n, i) => tone(NOTE(n), beat * 4.2, { type: 'sine', gain: i === 0 ? 0.03 : 0.018, when, attack: 0.8, out: musicBus }))
-      // a few melody notes taken from the chord (always in tune)
+      // Soft, warm acoustic/electric piano pad
+      chord.forEach((n, i) =>
+        tone(NOTE(n), beat * 4.4, {
+          type: 'sine',
+          gain: i === 0 ? 0.032 : 0.016,
+          when,
+          attack: 0.9,
+          out: musicBus,
+        })
+      )
+      // Delicate kalimba / marimba acoustic melody notes in pentatonic harmony
       const notes = musicNight > 0.5 ? 1 : 2 + Math.floor(Math.random() * 2)
       for (let k = 0; k < notes; k++) {
-        if (Math.random() < 0.25) continue
-        const n = chord[1 + Math.floor(Math.random() * 3)] + 12
-        tone(NOTE(n), beat * 1.8, { type: 'triangle', gain: 0.022, when: when + k * beat * (4 / notes), attack: 0.04, out: musicBus })
+        if (Math.random() < 0.2) continue
+        const n = chord[1 + Math.floor(Math.random() * (chord.length - 1))] + 12
+        mallet(NOTE(n), when + k * beat * (4 / notes) + Math.random() * 0.04, 0.025, beat * 1.5)
       }
       next += beat * 4
       bar++

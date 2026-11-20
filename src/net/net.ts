@@ -10,7 +10,7 @@
  * Swap BroadcastChannel for a WebSocket later to play across computers – the
  * message format stays the same.
  */
-import { airborne } from '../state/world'
+import { airborne, type VehicleKind } from '../state/world'
 import { bridge, type Msg } from '../state/netBridge'
 import { useGame, type Action, type Profile, type RemoteEvent, type WorldSnapshot } from '../state/gameStore'
 import { hostNpcs, player, remotePlayers } from '../state/sceneRegistry'
@@ -288,7 +288,7 @@ function handle(m: Record<string, unknown>) {
         moving: !!m.m,
         running: !!m.r,
         carry: (m.c as string) ?? null,
-        vehicle: (m.v as 'bike' | null) ?? null,
+        vehicle: (m.v as VehicleKind | null) ?? null,
         jump: (m.j as number) ?? 0,
         seen: Date.now(),
       })

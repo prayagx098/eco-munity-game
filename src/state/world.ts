@@ -168,17 +168,20 @@ export const HEAPS = [
   { id: 'heap-2', x: -18, z: 24, zone: 'Community Park' },
 ] as const
 
-export type VehicleKind = 'bike'
+export type VehicleKind = 'bike' | 'scooter' | 'board'
 export const VEHICLES: Record<VehicleKind, { name: string; emoji: string; speed: number; run: number; radius: number; blurb: string }> = {
   bike: { name: 'Solar Cycle', emoji: '🚲', speed: 8.5, run: 12, radius: 0.5, blurb: 'Solar battery & pedal power makes zero pollution!' },
+  scooter: { name: 'Solar Scooter', emoji: '🛴', speed: 9.5, run: 13.5, radius: 0.45, blurb: 'Standing electric scooter with rooftop solar charging!' },
+  board: { name: 'Eco Skateboard', emoji: '🛹', speed: 8.0, run: 11.5, radius: 0.4, blurb: 'Recycled bamboo deck with regenerative braking wheels!' },
 }
 /** Free-to-borrow eco vehicles */
 export const STANDS: { id: string; kind: VehicleKind; x: number; z: number; rot: number }[] = [
   { id: 'stand-0', kind: 'bike', x: 9.5, z: 4, rot: 0.6 },
   { id: 'stand-1', kind: 'bike', x: -14.5, z: -4.5, rot: 2.2 },
-  { id: 'stand-2', kind: 'bike', x: 44, z: 3.6, rot: 1.2 },
-  { id: 'stand-3', kind: 'bike', x: 50.5, z: -9, rot: 1.6 },
-  { id: 'stand-5', kind: 'bike', x: 14, z: 26, rot: 1 },
+  { id: 'stand-2', kind: 'scooter', x: 44, z: 3.6, rot: 1.2 },
+  { id: 'stand-3', kind: 'board', x: 50.5, z: -9, rot: 1.6 },
+  { id: 'stand-4', kind: 'scooter', x: -28, z: -10, rot: 1.57 },
+  { id: 'stand-5', kind: 'board', x: 14, z: 26, rot: 1 },
 ]
 /** A rentable vehicle standing somewhere in town (at a stand, or parked where somebody left it) */
 export interface VehicleEntity {

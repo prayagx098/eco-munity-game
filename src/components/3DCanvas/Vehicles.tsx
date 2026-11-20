@@ -121,7 +121,147 @@ export function Wheel({
 /* FUTURISTIC SOLAR HYPER-CYCLE (RIDEABLE PLAYER VEHICLE)             */
 /* ------------------------------------------------------------------ */
 
-export function VehicleMesh({ kind: _kind, spin = false, odoRef }: { kind: VehicleKind; spin?: boolean; odoRef?: { current: number } }) {
+function ScooterModel({ spin = false, odoRef }: { spin?: boolean; odoRef?: { current: number } }) {
+  const wheels = useRef<Group[]>([])
+  useFrame(() => {
+    if (!spin) return
+    const o = odoRef ? odoRef.current : player.odo
+    for (const w of wheels.current) if (w) w.rotation.x = o / 0.14
+  })
+  const setW = (i: number) => (g: Group | null) => {
+    if (g) wheels.current[i] = g
+  }
+  return (
+    <group>
+      {/* Front Wheel */}
+      <group position={[0, 0.14, 0.52]} ref={setW(0)}>
+        <mesh rotation={[0, 0, Math.PI / 2]} castShadow>
+          <cylinderGeometry args={[0.14, 0.14, 0.06, 18]} />
+          <meshStandardMaterial color="#1f2937" roughness={0.8} />
+        </mesh>
+        <mesh rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.08, 0.08, 0.065, 12]} />
+          <meshStandardMaterial color="#38bdf8" metalness={0.8} roughness={0.2} />
+        </mesh>
+      </group>
+
+      {/* Rear Wheel */}
+      <group position={[0, 0.14, -0.48]} ref={setW(1)}>
+        <mesh rotation={[0, 0, Math.PI / 2]} castShadow>
+          <cylinderGeometry args={[0.14, 0.14, 0.06, 18]} />
+          <meshStandardMaterial color="#1f2937" roughness={0.8} />
+        </mesh>
+        <mesh rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.08, 0.08, 0.065, 12]} />
+          <meshStandardMaterial color="#38bdf8" metalness={0.8} roughness={0.2} />
+        </mesh>
+      </group>
+
+      {/* Low Foot Deck */}
+      <mesh position={[0, 0.12, 0.02]} castShadow>
+        <boxGeometry args={[0.22, 0.04, 0.88]} />
+        <meshStandardMaterial color="#0284c7" metalness={0.6} roughness={0.3} />
+      </mesh>
+      {/* Grip Tape */}
+      <mesh position={[0, 0.142, 0.02]}>
+        <boxGeometry args={[0.18, 0.008, 0.8]} />
+        <meshStandardMaterial color="#0f172a" roughness={0.95} />
+      </mesh>
+
+      {/* Steering Column / Stem */}
+      <mesh position={[0, 0.58, 0.46]} rotation={[-0.14, 0, 0]}>
+        <cylinderGeometry args={[0.022, 0.022, 0.88, 12]} />
+        <meshStandardMaterial color="#f8fafc" metalness={0.9} roughness={0.15} />
+      </mesh>
+
+      {/* Solar Panel & Digital Display on Stem */}
+      <mesh position={[0, 0.94, 0.41]} rotation={[-0.4, 0, 0]}>
+        <boxGeometry args={[0.14, 0.025, 0.09]} />
+        <meshStandardMaterial color="#0891b2" emissive="#06b6d4" emissiveIntensity={0.6} metalness={0.8} roughness={0.2} />
+      </mesh>
+
+      {/* T-bar Handlebars */}
+      <mesh position={[0, 1.0, 0.39]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.02, 0.02, 0.58, 12]} />
+        <meshStandardMaterial color="#0f172a" metalness={0.8} roughness={0.25} />
+      </mesh>
+      {/* Ergonomic Grips */}
+      {[-0.24, 0.24].map((x) => (
+        <mesh key={x} position={[x, 1.0, 0.39]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.026, 0.026, 0.12, 10]} />
+          <meshStandardMaterial color="#0284c7" roughness={0.6} />
+        </mesh>
+      ))}
+
+      {/* Front LED Headlight */}
+      <mesh position={[0, 0.86, 0.46]}>
+        <sphereGeometry args={[0.035, 10, 8]} />
+        <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={1.2} />
+      </mesh>
+    </group>
+  )
+}
+
+function BoardModel({ spin = false, odoRef }: { spin?: boolean; odoRef?: { current: number } }) {
+  const wheels = useRef<Group[]>([])
+  useFrame(() => {
+    if (!spin) return
+    const o = odoRef ? odoRef.current : player.odo
+    for (const w of wheels.current) if (w) w.rotation.x = o / 0.07
+  })
+  const setW = (i: number) => (g: Group | null) => {
+    if (g) wheels.current[i] = g
+  }
+  return (
+    <group>
+      {/* Curved Bamboo Skateboard Deck */}
+      <mesh position={[0, 0.09, 0]} castShadow>
+        <boxGeometry args={[0.26, 0.025, 0.86]} />
+        <meshStandardMaterial color="#ca8a04" metalness={0.2} roughness={0.5} />
+      </mesh>
+      {/* Front Kicktail */}
+      <mesh position={[0, 0.115, 0.45]} rotation={[-0.25, 0, 0]}>
+        <boxGeometry args={[0.24, 0.025, 0.16]} />
+        <meshStandardMaterial color="#ca8a04" metalness={0.2} roughness={0.5} />
+      </mesh>
+      {/* Rear Kicktail */}
+      <mesh position={[0, 0.115, -0.45]} rotation={[0.25, 0, 0]}>
+        <boxGeometry args={[0.24, 0.025, 0.16]} />
+        <meshStandardMaterial color="#ca8a04" metalness={0.2} roughness={0.5} />
+      </mesh>
+      {/* Grip Tape with Green Center Line */}
+      <mesh position={[0, 0.105, 0]}>
+        <boxGeometry args={[0.23, 0.005, 0.82]} />
+        <meshStandardMaterial color="#1e293b" roughness={0.98} />
+      </mesh>
+      <mesh position={[0, 0.108, 0]}>
+        <boxGeometry args={[0.02, 0.005, 0.8]} />
+        <meshStandardMaterial color="#22c55e" emissive="#16a34a" emissiveIntensity={0.4} />
+      </mesh>
+
+      {/* Trucks (Front & Back) */}
+      {[-0.28, 0.28].map((z, idx) => (
+        <group key={z} position={[0, 0.065, z]}>
+          <mesh rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.015, 0.015, 0.28, 8]} />
+            <meshStandardMaterial color="#94a3b8" metalness={0.9} roughness={0.2} />
+          </mesh>
+          {/* Urethane Wheels */}
+          {[-0.14, 0.14].map((x, wheelIdx) => (
+            <group key={x} position={[x, 0, 0]} ref={setW(idx * 2 + wheelIdx)}>
+              <mesh rotation={[0, 0, Math.PI / 2]} castShadow>
+                <cylinderGeometry args={[0.065, 0.065, 0.045, 14]} />
+                <meshStandardMaterial color="#10b981" roughness={0.4} metalness={0.3} />
+              </mesh>
+            </group>
+          ))}
+        </group>
+      ))}
+    </group>
+  )
+}
+
+function BikeModel({ spin = false, odoRef }: { spin?: boolean; odoRef?: { current: number } }) {
   const wheels = useRef<Group[]>([])
   useFrame(() => {
     if (!spin) return
@@ -362,6 +502,12 @@ export function VehicleMesh({ kind: _kind, spin = false, odoRef }: { kind: Vehic
       ))}
     </group>
   )
+}
+
+export function VehicleMesh({ kind = 'bike', spin = false, odoRef }: { kind?: VehicleKind; spin?: boolean; odoRef?: { current: number } }) {
+  if (kind === 'scooter') return <ScooterModel spin={spin} odoRef={odoRef} />
+  if (kind === 'board') return <BoardModel spin={spin} odoRef={odoRef} />
+  return <BikeModel spin={spin} odoRef={odoRef} />
 }
 
 /** A vehicle waiting at a stand or parked wherever the last rider left it */

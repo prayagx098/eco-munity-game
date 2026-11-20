@@ -3,7 +3,7 @@
  * (it would re-render every frame). The 3D scene writes here in useFrame;
  * the game logic, HUD, mini-map and multiplayer layer read from it.
  */
-import { PLAYER_START } from './world'
+import { PLAYER_START, type VehicleKind } from './world'
 
 export interface NpcSnapshot {
   x: number
@@ -27,12 +27,34 @@ export const player = {
   moving: false,
   running: false,
   /** eco vehicle you are riding (null when on foot) */
-  vehicle: null as null | 'bike',
+  vehicle: null as null | VehicleKind,
   /** distance covered by the wheels (spins them) */
   odo: 0,
   /** forward speed while riding (negative = reversing) */
   vspeed: 0,
 }
+
+/** Bicycle bell ring timestamp and position (causes nearby NPCs to wave or move aside) */
+export const lastBellRing = { time: 0, x: 0, z: 0 }
+
+/** Bin reaction states for wobble feedback and green sparkle fireworks */
+export const wobbleBinState = { slotId: null as string | null, time: 0 }
+export const binSparkleState = { slotId: null as string | null, time: 0 }
+
+/** Dog fetch stick physics & animation state */
+export const fetchStick = {
+  active: false,
+  x: 0,
+  y: 0,
+  z: 0,
+  targetX: 0,
+  targetZ: 0,
+  state: 'idle' as 'idle' | 'flying' | 'on_ground' | 'returning',
+  progress: 0,
+}
+
+/** Duck feeding seed locations on pond surface */
+export const duckFeeds: Array<{ id: number; x: number; z: number; time: number }> = []
 
 /** The school football (position, velocity, height) */
 export const ball = { x: -11, z: 19.5, y: 0.22, vx: 0, vz: 0, vy: 0, lastGoal: 0 }
@@ -58,7 +80,7 @@ export interface RemoteSnapshot {
   moving: boolean
   running: boolean
   carry: string | null // trash type id, 'pet', or null
-  vehicle: 'bike' | null
+  vehicle: VehicleKind | null
   /** height above the ground while jumping */
   jump: number
   seen: number

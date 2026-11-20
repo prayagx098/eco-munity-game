@@ -18,7 +18,8 @@ import { BIN_SLOTS, HEAPS, LEARNING_BOARD, VEHICLES, MAKER_PADS, MAKER_YARD, ini
 import { isGrown, makeRoomForTrees } from './forest'
 import { useMeta } from './meta'
 import type { HomeDecor, HomeState } from './homes'
-import { act, ball, companionPos, dress, emitBurst, npcPositions, player, remotePlayers } from './sceneRegistry'
+import { act, ball, binSparkleState, companionPos, dress, duckFeeds, emitBurst, fetchStick, lastBellRing, npcPositions, player, remotePlayers, wobbleBinState } from './sceneRegistry'
+import { haptic } from '../utils/haptics'
 import { filterMessage, isKind } from './chatBot'
 import { bridge } from './netBridge'
 import { sfx, type SfxName } from '../audio/audio'
@@ -120,12 +121,14 @@ export interface Weather {
   storm: boolean
 }
 
-export type InteractionKind = 'pickup' | 'bin' | 'plant' | 'water' | 'lights' | 'tap' | 'feed' | 'look' | 'turn' | 'ride' | 'dog' | 'kick' | 'pet' | 'return-pet' | 'quest' | 'talk' | 'quiz-bowl' | 'adopt' | 'pet-companion' | 'dismiss-companion' | 'whistle' | 'harvest' | 'home'
+export type InteractionKind = 'pickup' | 'bin' | 'plant' | 'water' | 'lights' | 'tap' | 'feed' | 'look' | 'turn' | 'ride' | 'dog' | 'kick' | 'pet' | 'return-pet' | 'quest' | 'talk' | 'quiz-bowl' | 'adopt' | 'pet-companion' | 'dismiss-companion' | 'whistle' | 'harvest' | 'home' | 'fetch-stick' | 'feed-ducks'
 
 export interface FootballMatch {
   red: number
   blue: number
   active: boolean
+  timeLeft: number
+  celebration?: 'red' | 'blue' | null
 }
 
 export interface CompanionState {
@@ -502,11 +505,15 @@ export interface GameState {
   footballMatch: FootballMatch
   scoreFootballGoal: (team: 'red' | 'blue') => void
   resetFootballMatch: () => void
+  tickFootballTimer: (dt: number) => void
 
   companion: CompanionState | null
   adoptCompanion: (kind: 'dog' | 'cat' | 'duck', name: string) => void
   petCompanion: () => void
   dismissCompanion: () => void
+  throwStick: () => void
+  feedDucks: () => void
+  ringBikeBell: () => void
 
   quizBowl: QuizBowlState | null
   startQuizBowl: () => void
@@ -614,7 +621,7 @@ const initialPlayer = () => ({
   floaters: [] as Floater[],
   captions: [] as { id: string; text: string }[],
   stats: { sorted: 0, mistakes: 0, trees: 0, watered: 0, lightsOff: 0, tapsFixed: 0, learned: 0, turned: 0, rode: 0, pondCleaned: 0, coins: 0, kindWords: 0 } as Stats,
-  footballMatch: { red: 0, blue: 0, active: true } as FootballMatch,
+  footballMatch: { red: 0, blue: 0, active: true, timeLeft: 120, celebration: null } as FootballMatch,
   companion: null as CompanionState | null,
   quizBowl: null as QuizBowlState | null,
 })
@@ -690,7 +697,17 @@ export function findInteraction(s: GameState, px: number, pz: number): Interacti
     ]
     if (s.companion) {
       const dComp = Math.hypot(player.x - companionPos.x, player.z - companionPos.z)
-      if (dComp < 2.0 && !player.vehicle) {
+      if (dComp < 2.5 && !player.vehicle) {
+        if (s.companion.kind === 'dog' && !fetchStick.active) {
+          add(dComp - 0.2, 2.5, {
+            kind: 'fetch-stick',
+            targetId: 'fetch',
+            label: `Throw Stick / Play Fetch with ${s.companion.name} 🦴`,
+            emoji: '🦴',
+            x: companionPos.x,
+            z: companionPos.z,
+          })
+        }
         const justPet = Date.now() - s.companion.petAt < 6000
         add(dComp, 2.0, {
           kind: justPet ? 'dismiss-companion' : 'pet-companion',
@@ -712,6 +729,19 @@ export function findInteraction(s: GameState, px: number, pz: number): Interacti
           z: pet.z,
         })
       }
+    }
+
+    // 4. Feed Seeds to Pond Ducks
+    const dPond = dist(POND.x, POND.z)
+    if (dPond < 9.5 && !player.vehicle && !s.carrying) {
+      add(dPond - 4, 9.5, {
+        kind: 'feed-ducks',
+        targetId: 'pond-ducks',
+        label: 'Feed Seeds to Ducks 🌾',
+        emoji: '🌾',
+        x: POND.x,
+        z: POND.z,
+      })
     }
 
     // 4. Eco Quiz Bowl (Podium in school courtyard and deck)
@@ -903,12 +933,14 @@ export const useGame = create<GameState>()((set, get) => {
     closeQuiz: () => set({ quiz: null }),
 
     /* Pillar 2: High-Energy Mini-Games & Animal Companions */
-    footballMatch: { red: 0, blue: 0, active: true },
+    footballMatch: { red: 0, blue: 0, active: true, timeLeft: 120, celebration: null },
     scoreFootballGoal: (team) => {
-      const match = get().footballMatch ?? { red: 0, blue: 0, active: true }
-      const updated = { ...match, [team]: (match[team] ?? 0) + 1 }
+      const match = get().footballMatch ?? { red: 0, blue: 0, active: true, timeLeft: 120, celebration: null }
+      const updated = { ...match, [team]: (match[team] ?? 0) + 1, celebration: team }
       set({ footballMatch: updated })
-      sfx('fanfare')
+      sfx('whistle')
+      setTimeout(() => sfx('cheer'), 220)
+      haptic([80, 50, 80, 50, 150])
       get().pushToast({
         kind: 'good',
         emoji: '⚽',
@@ -917,16 +949,79 @@ export const useGame = create<GameState>()((set, get) => {
       })
       get().reward({ points: 15, happiness: 5, energy: 2, x: ball.x, z: ball.z, label: '+15 ⚽' })
       get().checkBadges()
+      setTimeout(() => {
+        if (get().footballMatch?.celebration === team) {
+          set((s) => ({ footballMatch: { ...s.footballMatch, celebration: null } }))
+        }
+      }, 3500)
     },
     resetFootballMatch: () => {
-      set({ footballMatch: { red: 0, blue: 0, active: true } })
-      sfx('bell')
+      set({ footballMatch: { red: 0, blue: 0, active: true, timeLeft: 120, celebration: null } })
+      sfx('whistle')
       get().pushToast({
         kind: 'info',
         emoji: '⚽',
         title: 'Football Match Reset!',
-        text: 'Kick-off from center field. Red vs Blue!',
+        text: '2-Minute Countdown started. Kick-off from center field! Red vs Blue!',
       })
+    },
+    tickFootballTimer: (dt) => {
+      const m = get().footballMatch
+      if (!m || !m.active) return
+      const nextTime = m.timeLeft - dt
+      if (nextTime <= 0) {
+        sfx('whistle')
+        setTimeout(() => sfx('cheer'), 200)
+        haptic([100, 60, 100, 60, 200])
+        const winner = m.red > m.blue ? 'RED TEAM WINS! 🏆' : m.blue > m.red ? 'BLUE TEAM WINS! 🏆' : 'THRILLING DRAW! 🤝'
+        get().pushToast({
+          kind: 'info',
+          emoji: '⚽',
+          title: 'Full Time! 2-Minute Match Over',
+          text: `${winner} Final Score: Red ${m.red} - Blue ${m.blue}. New match starting!`,
+        })
+        set({ footballMatch: { red: 0, blue: 0, active: true, timeLeft: 120, celebration: null } })
+      } else {
+        set({ footballMatch: { ...m, timeLeft: nextTime } })
+      }
+    },
+
+    ringBikeBell: () => {
+      sfx('bike-bell')
+      haptic([20, 30, 20])
+      lastBellRing.time = Date.now()
+      lastBellRing.x = player.x
+      lastBellRing.z = player.z
+      get().addFloater({ x: player.x, z: player.z, text: '🔔 Ding! Ding!', color: '#38bdf8' })
+    },
+
+    throwStick: () => {
+      const heading = player.heading
+      const dist = 6.5
+      fetchStick.active = true
+      fetchStick.x = player.x
+      fetchStick.y = 0.5
+      fetchStick.z = player.z
+      fetchStick.targetX = player.x + Math.sin(heading) * dist
+      fetchStick.targetZ = player.z + Math.cos(heading) * dist
+      fetchStick.state = 'flying'
+      fetchStick.progress = 0
+      sfx('jump')
+      haptic(15)
+      get().addFloater({ x: player.x, z: player.z, text: '🦴 Go Fetch!', color: '#f59e0b' })
+    },
+
+    feedDucks: () => {
+      const heading = player.heading
+      const seedX = player.x + Math.sin(heading) * 2.5
+      const seedZ = player.z + Math.cos(heading) * 2.5
+      duckFeeds.push({ id: Date.now(), x: seedX, z: seedZ, time: Date.now() })
+      if (duckFeeds.length > 8) duckFeeds.shift()
+      sfx('splash')
+      setTimeout(() => sfx('quack'), 350)
+      haptic(15)
+      get().reward({ happiness: 5, energy: 2, x: seedX, z: seedZ, label: '💖 +5 Seeds' })
+      get().addFloater({ x: seedX, z: seedZ, text: '🌾 Splish! Happy ducks 🦆', color: '#facc15' })
     },
 
     companion: null,
@@ -1312,6 +1407,8 @@ export const useGame = create<GameState>()((set, get) => {
         quest: [1.0, 0.35],
         bin: [0.8, 0.4],
         pickup: [0.8, 0.4],
+        'fetch-stick': [0.6, 0.3],
+        'feed-ducks': [0.7, 0.35],
       }
       if (n.kind === 'plant') {
         const dx = player.x - n.x
@@ -1341,6 +1438,8 @@ export const useGame = create<GameState>()((set, get) => {
         else if (n.kind === 'plant') emitBurst({ x: at.x, z: at.z, y: 0.3, color: '#8b5a2b', n: 12, spread: 1.4 })
         else if (n.kind === 'lights') emitBurst({ x: at.x, z: at.z, y: 1.2, color: '#fde047', n: 10 })
         else if (n.kind === 'bin') emitBurst({ x: at.x, z: at.z, y: 1.0, color: '#86efac', n: 10 })
+        else if (n.kind === 'fetch-stick') emitBurst({ x: fx, z: fz, y: 0.8, color: '#ca8a04', n: 8 })
+        else if (n.kind === 'feed-ducks') emitBurst({ x: fx, z: fz, y: 0.6, color: '#facc15', n: 14 })
         get().performInteraction(n)
       }
     },
@@ -1349,6 +1448,10 @@ export const useGame = create<GameState>()((set, get) => {
       const s = get()
       if (s.screen !== 'playing' || s.paused || s.pending) return
       switch (n.kind) {
+        case 'fetch-stick':
+          return get().throwStick()
+        case 'feed-ducks':
+          return get().feedDucks()
         case 'pickup':
           return get().dispatch({ kind: 'pickup', id: n.targetId })
         case 'bin':
@@ -1465,7 +1568,13 @@ export const useGame = create<GameState>()((set, get) => {
         if (r.home !== undefined) meta.setHome(r.home ? r.home.id : null, r.home?.decor && Object.keys(r.home.decor).length ? r.home.decor : undefined)
       }
       if (r.toast) get().pushToast(r.toast)
-      if (r.sfx) sfx(r.sfx)
+      if (r.sfx) {
+        sfx(r.sfx)
+        if (r.sfx === 'pickup') haptic(15)
+        else if (r.sfx === 'correct' || r.sfx === 'pop') haptic(25)
+        else if (r.sfx === 'buzzer' || r.sfx === 'wrong') haptic([40, 50, 40])
+        else if (r.sfx === 'drop') haptic(10)
+      }
       get().checkBadges()
     },
 
@@ -1505,9 +1614,18 @@ export const useGame = create<GameState>()((set, get) => {
               team(TRUCK_INFO[slot.kind].emoji, `filled a ${bin.label} bin. The ${TRUCK_INFO[slot.kind].name.toLowerCase()} is coming!`)
             }
             set({ binFill, jobs })
+            binSparkleState.slotId = slot.id
+            binSparkleState.time = Date.now()
+            emitBurst({ x: slot.x, z: slot.z, y: 1.2, color: '#22c55e', n: 16, spread: 2.2 })
+            emitBurst({ x: slot.x, z: slot.z, y: 1.3, color: '#86efac', n: 12, spread: 1.8 })
+            emitBurst({ x: slot.x, z: slot.z, y: 1.4, color: '#facc15', n: 10, spread: 1.5 })
             get().reward({ points: a.fromPond ? 15 : 10, energy: 4, happiness: a.fromPond ? 3 : 1.5, x: slot.x, z: slot.z, label: `+${a.fromPond ? 15 : 10} ⭐` })
+            get().addFloater({ x: slot.x, z: slot.z, text: '+10 🪙', color: '#facc15' }, true)
+            get().addCoins(10, 'Sorted litter correctly')
             get().progress(kindsForSort(type, a.fromPond))
             team(type.emoji, `sorted ${withArticle(type.label.toLowerCase())}!`)
+            haptic(25)
+            sfx('pop')
             return {
               carrying: null,
               sfx: 'correct',
@@ -1516,13 +1634,17 @@ export const useGame = create<GameState>()((set, get) => {
             }
           }
           const right = BIN_DEFS[type.bin]
+          wobbleBinState.slotId = slot.id
+          wobbleBinState.time = Date.now()
+          haptic([40, 50, 40])
+          sfx('buzzer')
           set({ energy: clamp(s.energy - 2), trash: [...s.trash, { id: nid('trash'), typeId: a.typeId, x: slot.x + 1.1, z: slot.z + 1.1 }] })
           get().addFloater({ x: slot.x, z: slot.z, text: 'Oops! 🤔', color: '#dc2626' }, true)
           return {
             carrying: null,
-            sfx: 'wrong',
+            sfx: 'buzzer',
             stat: { mistakes: 1 },
-            toast: { kind: 'bad', emoji: '💡', title: `Not quite! ${type.label} goes in ${right.emoji} ${right.label}.`, text: tips ? type.tip : undefined },
+            toast: { kind: 'bad', emoji: '💡', title: `Oops! ${type.label} goes in ${right.emoji} ${right.label}`, text: type.tip },
           }
         }
         case 'drop':
