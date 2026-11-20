@@ -128,10 +128,11 @@ export const HEART_POS: XZ = [-2.6, -3.4]
 export const BARN = rect(36, 14, 7, 6)
 export const POND = { x: 20, z: -20, r: 6 }
 
+/** a tidy wind farm in the Sunny Fields, in a row, instead of turbines dotted across the lawns */
 export const WIND_TURBINES: XZ[] = [
-  [4.5, -27.5],
-  [-17, -18],
-  [-17, -9],
+  [34, -13],
+  [39, -13],
+  [44, -13],
 ]
 
 export const HOUSE_ZS = [-40, -31, -22, -13, -4, 5, 14, 23]
@@ -192,8 +193,15 @@ export const RESPAWN_HIDDEN_DIST = 30
 export const BEACH = { x0: 46, x1: WORLD_HALF, z0: -22, z1: 28 }
 export const SEA = { x0: 55.5, x1: WORLD_HALF, z0: -22, z1: 28 }
 export const PIER = { x0: 54, x1: 59.5, z0: -1.2, z1: 1.2 }
-export const LEARNING_CORNER = rect(0, -54, 12, 8)
-export const LEARNING_BOARD: XZ = [0, -56.4]
+/**
+ * The Learning Centre: a raised classroom deck set back from the road, reached by a paved forecourt, an entrance arch
+ * and three steps. (Deck x -7..7, z -65.5..-56.5; forecourt in front of it down to the road.)
+ */
+export const LEARNING_CORNER = rect(0, -61, 14, 9)
+export const LEARNING_BOARD: XZ = [0, -63.2]
+export const LEARNING_FORECOURT: Rect = { x0: -7.5, x1: 7.5, z0: LEARNING_CORNER.z1, z1: -50.2 }
+/** the arch over the entrance path */
+export const LEARNING_ARCH_Z = -53
 /** Areas where grass tufts should not grow */
 export const NO_GRASS: Rect[] = [
   BEACH,
@@ -209,6 +217,8 @@ export const NO_GRASS: Rect[] = [
 ]
 
 const FLOWER_BEDS_ALL: { x: number; z: number; w: number; d: number }[] = [
+  { x: -4.8, z: -54.6, w: 3.4, d: 1.6 },
+  { x: 4.8, z: -54.6, w: 3.4, d: 1.6 },
   { x: -14, z: 5.5, w: 4, d: 2.4 },
   { x: -9, z: 10, w: 4, d: 2.4 },
   { x: 6, z: 9.5, w: 3.4, d: 2.2 },
@@ -418,6 +428,8 @@ export const SIGNPOSTS: Signpost[] = [
 ]
 
 export const BENCHES: [number, number, number][] = [
+  [-5.6, -52.2, Math.PI / 2],
+  [5.6, -52.2, -Math.PI / 2],
   [-10, 18, 0],
   [-8, 23, Math.PI],
   [5.5, -4.8, 0],
@@ -457,6 +469,8 @@ export const TREES: [number, number, number][] = TREES_ALL.filter(
     ROADS_EW.every((r) => Math.abs(z - r.z) > 5.5) &&
     !(x > 9.5 && x < 30.5 && z > -30.5 && z < -10) &&
     !(x > SCHOOL_BUILDING.x0 - 1.5 && x < SCHOOL_BUILDING.x1 + 1.5 && z > SCHOOL_BUILDING.z0 - 1.5 && z < SCHOOL_BUILDING.z1 + 1.5) &&
+    !(x > -10 && x < 10 && z < -49 && z > -70) &&
+    !(x > 30 && x < 47 && z > -16 && z < -10) &&
     !(x > ECO_HUB.x0 - 3 && x < ECO_HUB.x1 + 3 && z > ECO_HUB.z0 - 3 && z < HUB_YARD.z1 + 3) &&
     !(x > STORE.x0 - 2.5 && x < STORE.x1 + 2.5 && z > STORE.z0 - 2.5 && z < MAKER_YARD.z1 + 2.5),
 )
@@ -474,6 +488,8 @@ function marginTrees(): [number, number, number][] {
     if (ROADS_EW.some((r) => Math.abs(z - r.z) < 5.5)) continue
     if (z > RIVER.z0 - 2.5 && z < RIVER.z1 + 2.5) continue
     if (x > 53 && z > -25 && z < 31) continue // beach and sea
+    if (Math.abs(x) < 12 && z < -49) continue // the Learning Centre and its forecourt
+    if (x > 30 && x < 47 && z > -16 && z < -10) continue // the wind farm
     if (x > ECO_HUB.x0 - 4 && x < ECO_HUB.x1 + 4 && z > ECO_HUB.z0 - 4 && z < HUB_YARD.z1 + 4) continue // the Eco Waste Hub
     out.push([x, z, 0.9 + rnd() * 0.5])
   }
@@ -548,7 +564,7 @@ export const PATHS: Rect[] = [
   { x0: -2, x1: 2, z0: -17, z1: -6 }, // to the school entrance
   { x0: -20.5, x1: -9, z0: -1.5, z1: 1.5 }, // west
   { x0: 9, x1: 55, z0: -1.5, z1: 1.5 }, // east (to the beach)
-  { x0: -1.5, x1: 1.5, z0: -50, z1: -24.5 }, // north to Learning Corner
+  { x0: -1.5, x1: 1.5, z0: LEARNING_CORNER.z1, z1: -24.5 }, // north to the Learning Centre
   { x0: -1.5, x1: 1.5, z0: 6, z1: 45.5 }, // south (over the bridge)
   // service roads for the waste trucks
   { x0: -20.5, x1: -11.2, z0: -27.3, z1: -25.7 },
@@ -566,6 +582,8 @@ export const PATHS: Rect[] = [
   { x0: 27, x1: 28.6, z0: -27, z1: -13 },
   { x0: -13, x1: -11, z0: -27, z1: -1.5 }, // to recycling center
   { x0: 33, x1: 35, z0: 1.5, z1: 11 }, // to barn
+  // a short front path from every house door out to the pavement
+  ...HOUSES.map((h) => ({ x0: h.door[0] - 0.4, x1: -27.7, z0: h.door[1] - 0.6, z1: h.door[1] + 0.6 })),
   // footpath from the crossing, between the houses and behind them to the school gate
   { x0: -34.8, x1: -27.8, z0: -1, z1: 2 },
   { x0: -34.85, x1: -33.15, z0: -19.9, z1: 2 },
@@ -576,6 +594,7 @@ export const PATHS: Rect[] = [
   { x0: SCHOOL_GATE.x - SCHOOL_GATE.w / 2, x1: SCHOOL_GATE.x + SCHOOL_GATE.w / 2, z0: -18, z1: -17.4 }, // gate
   { x0: 3, x1: 10, z0: 24.5, z1: 28.5 }, // riverside deck
   { x0: 26, x1: 31, z0: 7, z1: 11 }, // farm bins
+  LEARNING_FORECOURT, // paved forecourt
   { x0: LEARNING_CORNER.x0 - 0.5, x1: LEARNING_CORNER.x1 + 0.5, z0: LEARNING_CORNER.z0 - 0.5, z1: LEARNING_CORNER.z1 + 0.5 }, // learning corner deck
 ]
 
@@ -652,6 +671,7 @@ export const OBSTACLE_RECTS: Rect[] = [
 /** Street lamps (also drawn by Town.tsx) */
 export const LAMPS: XZ[] = [
   [-9.9, -6.9], [9.9, -6.9], [-9.9, 6.9], [9.9, 6.9], [13.4, -6], [2.5, 18], [2.5, 21.5], [25, -2.7], [-10.3, -10],
+  [-3.4, -51.4], [3.4, -51.4], [-3.4, -57.2], [3.4, -57.2],
 ]
 
 const thin = (x0: number, x1: number, z0: number, z1: number): Rect => ({ x0, x1, z0, z1 })
@@ -660,12 +680,17 @@ const PROP_RECTS: Rect[] = [
   thin(28, 38, 16.1, 16.3),
   thin(28, 38, 24.4, 24.6),
   thin(27.9, 28.1, 16.2, 24.5),
-  // learning corner deck rails (open at the front where the path arrives)
-  thin(-6, -1.5, -50.1, -49.9),
-  thin(1.5, 6, -50.1, -49.9),
-  thin(-6, 6, -58.1, -57.9),
-  thin(-6.1, -5.9, -58, -50),
-  thin(5.9, 6.1, -58, -50),
+  // learning centre deck rails (open at the front where the steps are)
+  thin(LEARNING_CORNER.x0, -1.7, LEARNING_CORNER.z1 - 0.1, LEARNING_CORNER.z1 + 0.1),
+  thin(1.7, LEARNING_CORNER.x1, LEARNING_CORNER.z1 - 0.1, LEARNING_CORNER.z1 + 0.1),
+  thin(LEARNING_CORNER.x0, LEARNING_CORNER.x1, LEARNING_CORNER.z0 - 0.1, LEARNING_CORNER.z0 + 0.1),
+  thin(LEARNING_CORNER.x0 - 0.1, LEARNING_CORNER.x0 + 0.1, LEARNING_CORNER.z0, LEARNING_CORNER.z1),
+  thin(LEARNING_CORNER.x1 - 0.1, LEARNING_CORNER.x1 + 0.1, LEARNING_CORNER.z0, LEARNING_CORNER.z1),
+  // hedges along the road edge of the forecourt (the entrance path stays open)
+  thin(LEARNING_FORECOURT.x0, -2.4, -50.7, -50.3),
+  thin(2.4, LEARNING_FORECOURT.x1, -50.7, -50.3),
+  thin(LEARNING_FORECOURT.x0 - 0.2, LEARNING_FORECOURT.x0 + 0.2, LEARNING_CORNER.z1, -50.3),
+  thin(LEARNING_FORECOURT.x1 - 0.2, LEARNING_FORECOURT.x1 + 0.2, LEARNING_CORNER.z1, -50.3),
   // "road closed" barriers
   thin(ROAD_X - 2.6, ROAD_X + 2.6, -WORLD_HALF + 1.3, -WORLD_HALF + 1.5),
   thin(ROAD_X - 2.6, ROAD_X + 2.6, WORLD_HALF - 1.5, WORLD_HALF - 1.3),
@@ -696,7 +721,8 @@ export const OBSTACLE_CIRCLES: Circle[] = [
   { x: 52.5, z: 17, r: 0.9 }, // sandcastle
   { x: LEARNING_BOARD[0], z: LEARNING_BOARD[1], r: 0.5 },
   { x: HEART_POS[0], z: HEART_POS[1], r: 0.9 },
-  ...([[-8, -58, 1.6], [8.5, -57, 1.3], [-9, -52, 1], [10, -51, 1.2], [14, -55, 1.8], [-14, -55, 1.5]] as [number, number, number][]).map(([x, z, s]) => ({ x, z, r: s * 0.8 })),
+  // entrance arch pillars
+  ...[-2.1, 2.1].map((x) => ({ x, z: LEARNING_ARCH_Z, r: 0.45 })),
   { x: POND.x, z: POND.z, r: POND.r + 0.8 },
   { x: EWASTE_BIN[0], z: EWASTE_BIN[1], r: 0.5 },
   ...TREES.map(([x, z, s]) => ({ x, z, r: 0.9 * s })),

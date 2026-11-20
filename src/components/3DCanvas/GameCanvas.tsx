@@ -34,6 +34,7 @@ import { Saplings } from './Collectibles'
 import { Player } from './Player'
 import { Stands, Traffic } from './Vehicles'
 import { Roads } from './Roads'
+import { PathKerbs } from './PathKerbs'
 import { EcoHub } from './Depots'
 import { Trucks } from './Trucks'
 import { Signposts } from './Signposts'
@@ -435,7 +436,7 @@ export function GameCanvas() {
         st.gl.shadowMap.type = THREE.PCFSoftShadowMap
         st.gl.toneMapping = THREE.ACESFilmicToneMapping
         st.gl.toneMappingExposure = 1.12
-        if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { ecoThree: st })
+        if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { ecoThree: st, ecoReg: { player, view } })
       }}
     >
       <AutoQuality />
@@ -450,6 +451,7 @@ export function GameCanvas() {
       <Outskirts />
       <Ground />
       <Roads />
+      <PathKerbs />
       <Grass />
       <Puddles />
       <Neighbourhood />

@@ -89,7 +89,7 @@ function MapSvg({ big }: { big?: boolean }) {
   const k = 0.72
   const sx = k * (player.x - player.z)
   const sy = k * (player.x + player.z)
-  const viewBox = big ? '-61 -43 122 86' : `${sx - 22} ${sy - 15} 44 30`
+  const viewBox = big ? '-96 -66 192 132' : `${sx - 22} ${sy - 15} 44 30`
   const thirsty = GARDEN_PLOTS.filter((p) => s.plots[p.id] >= 60)
   const dot = big ? 1 : 1.4
   return (

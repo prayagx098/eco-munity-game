@@ -1,6 +1,7 @@
 import { useMemo, useRef } from 'react'
 import { InstancedTrees } from './InstancedTrees'
 import { InstancedFlowers } from './InstancedFlowers'
+import { LearningCentre } from './LearningCentre'
 import { useFrame } from '@react-three/fiber'
 import type { Group, Mesh } from 'three'
 import { Block, Label, Marker, Near, Plastic, Sign3D, sharedMaterials, type V3 } from './primitives'
@@ -10,10 +11,8 @@ import {
   BARN,
   BENCHES,
   BEACH,
-  LEARNING_CORNER,
   PIER,
   SEA,
-  LEARNING_BOARD,
   FLOWER_BEDS,
   GARDEN_PLOTS,
   HOUSES,
@@ -579,65 +578,7 @@ export function Beach() {
 
 /** Learning Corner: an outdoor classroom deck with a big chalkboard, study desks and a bookshelf */
 export function LearningCorner() {
-  const w = LEARNING_CORNER.x1 - LEARNING_CORNER.x0
-  const d = LEARNING_CORNER.z1 - LEARNING_CORNER.z0
-  const cx = (LEARNING_CORNER.x0 + LEARNING_CORNER.x1) / 2
-  const cz = (LEARNING_CORNER.z0 + LEARNING_CORNER.z1) / 2
-  const rocks: [number, number, number][] = [[-8, -58, 1.6], [8.5, -57, 1.3], [-9, -52, 1], [10, -51, 1.2], [14, -55, 1.8], [-14, -55, 1.5]]
-  return (
-    <group>
-      <Block position={[cx, 0.2, cz]} size={[w, 0.4, d]} color="#b9773e" tex="wood" texScale={2.2} />
-      {[-1, 1].map((sd) => (
-        <Block key={sd} position={[cx, 1.0, cz + sd * (d / 2 - 0.1)]} size={[w, 0.1, 0.1]} color="#8f5527" />
-      ))}
-      <Block position={[LEARNING_CORNER.x0 + 0.1, 1.0, cz]} size={[0.1, 0.1, d]} color="#8f5527" />
-      <Block position={[LEARNING_CORNER.x1 - 0.1, 1.0, cz]} size={[0.1, 0.1, d]} color="#8f5527" />
-      {[LEARNING_CORNER.x0 + 0.1, cx, LEARNING_CORNER.x1 - 0.1].flatMap((x) => [LEARNING_CORNER.z0 + 0.1, LEARNING_CORNER.z1 - 0.1].map((z) => (
-        <Block key={`${x}-${z}`} position={[x, 0.7, z]} size={[0.16, 0.6, 0.16]} color="#8f5527" tex="wood" texScale={1} />
-      )))}
-      {/* chalkboard on posts, study desks and a bookshelf */}
-      <group position={[cx, 0.4, cz - d / 2 + 0.8]}>
-        <Block position={[0, 1.5, 0]} size={[5.4, 2.2, 0.16]} color="#7a4a24" />
-        <Block position={[0, 1.5, 0.09]} size={[5.0, 1.8, 0.04]} color="#14532d" cast={false} />
-        <Sign3D text="💡 Today I learned…" position={[0, 2.15, 0.13]} width={3.6} height={0.5} bg="#14532d" border="#bbf7d0" />
-        {[-1.6, -0.5, 0.6, 1.5].map((x, k) => (
-          <Block key={x} position={[x, 1.15, 0.12]} size={[0.7 + (k % 2) * 0.3, 0.06, 0.02]} color="#f8fafc" cast={false} />
-        ))}
-        <Block position={[-2.6, 0.6, 0]} size={[0.14, 1.2, 0.14]} color="#7a4a24" />
-        <Block position={[2.6, 0.6, 0]} size={[0.14, 1.2, 0.14]} color="#7a4a24" />
-      </group>
-      {[-3.2, 0, 3.2].map((x) => (
-        <group key={x} position={[cx + x, 0.4, cz + 0.6]}>
-          <Block position={[0, 0.62, 0]} size={[1.8, 0.1, 0.9]} color="#d9a15b" tex="wood" texScale={1} />
-          <Block position={[-0.8, 0.3, 0]} size={[0.1, 0.6, 0.8]} color="#8f5527" />
-          <Block position={[0.8, 0.3, 0]} size={[0.1, 0.6, 0.8]} color="#8f5527" />
-          <Block position={[-0.3, 0.7, 0]} size={[0.5, 0.05, 0.36]} color="#38bdf8" cast={false} />
-          <Block position={[0.35, 0.7, 0.05]} size={[0.3, 0.12, 0.24]} color="#fb7185" cast={false} />
-          <Block position={[0, 0.3, 0.85]} size={[0.5, 0.6, 0.5]} color="#7c3aed" />
-        </group>
-      ))}
-      <group position={[LEARNING_CORNER.x1 - 0.9, 0.4, cz + 1.2]}>
-        <Block position={[0, 1.0, 0]} size={[0.5, 2.0, 1.8]} color="#92400e" tex="wood" texScale={1} />
-        {[0.4, 0.95, 1.5].map((y) => (
-          <Block key={y} position={[-0.27, y, 0]} size={[0.06, 0.4, 1.6]} color={['#ef4444', '#3b82f6', '#22c55e'][Math.round(y * 2) % 3]} cast={false} />
-        ))}
-      </group>
-      {/* flag */}
-      <Block position={[cx + 4.5, 2.2, cz + 2]} size={[0.1, 4, 0.1]} color="#e2e8f0" />
-      <Block position={[cx + 5.1, 3.7, cz + 2]} size={[1.1, 0.7, 0.04]} color="#22c55e" />
-      {rocks.map(([x, z, s], i) => (
-        <Block key={i} position={[x, s * 0.4, z]} size={[s * 1.4, s * 0.8, s * 1.1]} color="#94a3b8" rotation={[0, i, 0]} tex="brick" texScale={1.4} />
-      ))}
-      <Block position={[-6.2, 0.6, LEARNING_CORNER.z1 + 0.02]} size={[0.14, 1.9, 0.14]} color="#7a4a24" tex="wood" texScale={1} />
-      <Block position={[-3.0, 0.6, LEARNING_CORNER.z1 + 0.02]} size={[0.14, 1.9, 0.14]} color="#7a4a24" tex="wood" texScale={1} />
-      <Sign3D text="📚 Learning Corner" position={[-4.6, 1.45, LEARNING_CORNER.z1 + 0.1]} width={3.2} height={0.6} bg="#4338ca" border="#c7d2fe" />
-      <Near x={cx} z={cz} r={26}>
-        <Label position={[LEARNING_BOARD[0], 2.6, LEARNING_BOARD[1]]}>
-          <Marker emoji="💡" text="Learn!" color="bg-indigo-200" />
-        </Label>
-      </Near>
-    </group>
-  )
+  return <LearningCentre />
 }
 
 /** Signpost in the plaza pointing to each area */
