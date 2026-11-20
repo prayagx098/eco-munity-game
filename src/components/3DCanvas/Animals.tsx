@@ -1009,6 +1009,8 @@ export function Animals() {
     <group>
       {/* Active companion following the player */}
       <ActiveCompanion />
+      <FetchStickMesh />
+      <PondDuckFeeds />
 
       {/* park + forest */}
       <Wanderer center={[12, -27]} radius={2} speed={1.4} gait="hop" flee={3.2}>

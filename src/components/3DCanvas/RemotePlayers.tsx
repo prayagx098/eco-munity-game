@@ -4,7 +4,7 @@ import type { Group } from 'three'
 import { useGame, type Profile } from '../../state/gameStore'
 import { TRASH_BY_ID } from '../../state/gameData'
 import { env, remotePlayers } from '../../state/sceneRegistry'
-import { groundY, type VehicleKind } from '../../state/world'
+import { SCHOOL_FIELD, groundY, type VehicleKind } from '../../state/world'
 import { Label } from './primitives'
 import { VehicleMesh } from './Vehicles'
 import { Minifig, SpeechBubble, type MinifigAnim } from './NPCs'
@@ -19,6 +19,7 @@ function RemotePlayer({ id, profile }: { id: string; profile: Profile }) {
   const puffT = useRef(0)
   const [carry, setCarry] = useState<string | null>(null)
   const [vehicle, setVehicle] = useState<VehicleKind | null>(null)
+  const [bandana, setBandana] = useState<'red' | 'blue' | null>(null)
   const odo = useRef(0)
   const jumpY = useRef(0)
   const body = useRef<Group>(null)
@@ -55,7 +56,10 @@ function RemotePlayer({ id, profile }: { id: string; profile: Profile }) {
     anim.current.jump = Math.min(1, jumpY.current / 0.7)
     if (r.carry !== carry) setCarry(r.carry)
     if (r.vehicle !== vehicle) setVehicle(r.vehicle)
-    if (body.current) body.current.position.y = r.vehicle === 'bike' ? 0.34 : 0
+    if (body.current) body.current.position.y = r.vehicle === 'bike' ? 0.34 : r.vehicle === 'scooter' ? 0.08 : r.vehicle === 'board' ? 0.05 : 0
+    const onPitch = p.x >= SCHOOL_FIELD.x0 && p.x <= SCHOOL_FIELD.x1 && p.z >= SCHOOL_FIELD.z0 && p.z <= SCHOOL_FIELD.z1
+    const curBandana = onPitch ? (p.z < -3.2 ? 'red' : 'blue') : null
+    if (curBandana !== bandana) setBandana(curBandana)
     puffT.current += dt
     if (r.running && puffT.current > 0.14) {
       puffT.current = 0
@@ -68,7 +72,7 @@ function RemotePlayer({ id, profile }: { id: string; profile: Profile }) {
   return (
     <group ref={group}>
       <group ref={body}>
-        <Minifig shirt={profile.shirt} pants={profile.pants} hair={profile.hair} anim={anim} shirt2={profile.shirt2} shirtId={profile.shirtId} pantsId={profile.pantsId} pattern={profile.pattern} shoes={profile.shoes} hat={profile.hat} glasses={profile.glasses} back={profile.back} />
+        <Minifig shirt={profile.shirt} pants={profile.pants} hair={profile.hair} anim={anim} shirt2={profile.shirt2} shirtId={profile.shirtId} pantsId={profile.pantsId} pattern={profile.pattern} shoes={profile.shoes} hat={profile.hat} glasses={profile.glasses} back={profile.back} bandana={bandana} />
       </group>
       {vehicle && (
         <group ref={vehRef}>

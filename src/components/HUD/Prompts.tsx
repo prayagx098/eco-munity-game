@@ -41,11 +41,18 @@ export function InteractPrompt() {
       <div className="flex flex-wrap justify-center gap-2">
         <AnimatePresence mode="popLayout">
           {riding && (
-            <motion.button key="dismount" initial={{ opacity: 0, scale: 0.8, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.8 }} onClick={interact} className="glass pointer-events-auto flex items-center gap-2 px-4 py-2.5 text-sm font-semibold hover:bg-white/10">
-              <Key k="E" />
-              <span className="mr-1 text-xl">🚶</span>
-              Get off
-            </motion.button>
+            <>
+              <motion.button key="ring-bell" initial={{ opacity: 0, scale: 0.8, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.8 }} onClick={() => useGame.getState().ringBikeBell()} className="glass pointer-events-auto flex items-center gap-2 px-4 py-2.5 text-sm font-semibold hover:bg-white/10">
+                <Key k="Space" />
+                <span className="mr-1 text-xl">🔔</span>
+                Ring Bell
+              </motion.button>
+              <motion.button key="dismount" initial={{ opacity: 0, scale: 0.8, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.8 }} onClick={interact} className="glass pointer-events-auto flex items-center gap-2 px-4 py-2.5 text-sm font-semibold hover:bg-white/10">
+                <Key k="E" />
+                <span className="mr-1 text-xl">🚶</span>
+                Get off
+              </motion.button>
+            </>
           )}
           {nearby && !riding && (
             <motion.button
