@@ -1,4 +1,4 @@
-import { LEARNING_ARCH_Z, LEARNING_BOARD, LEARNING_CORNER, LEARNING_FORECOURT } from '../../state/world'
+import { LEARNING_ARCH_Z, LEARNING_BOARD, LEARNING_CORNER, LEARNING_FORECOURT, LEARNING_FRONT_Z } from '../../state/world'
 import { Block, Label, Marker, Near, Sign3D } from './primitives'
 
 const WOOD = '#8f5527'
@@ -95,13 +95,13 @@ export function LearningCentre() {
 
       {/* hedges close the forecourt on three sides; the path stays open */}
       {[
-        [(LEARNING_FORECOURT.x0 - 2.4) / 2 + 0, -50.5, 5.1 + 0.2, 0.5],
-        [(LEARNING_FORECOURT.x1 + 2.4) / 2 + 0, -50.5, 5.1 + 0.2, 0.5],
+        [(LEARNING_FORECOURT.x0 - 2.4) / 2 + 0, LEARNING_FRONT_Z - 0.3, 5.1 + 0.2, 0.5],
+        [(LEARNING_FORECOURT.x1 + 2.4) / 2 + 0, LEARNING_FRONT_Z - 0.3, 5.1 + 0.2, 0.5],
       ].map(([x, z, sw, sd], i) => (
         <Block key={i} position={[x, 0.4, z]} size={[sw, 0.8, sd]} color="#2f9a3a" tex="grass" texScale={1} />
       ))}
       {[LEARNING_FORECOURT.x0, LEARNING_FORECOURT.x1].map((x) => (
-        <Block key={x} position={[x, 0.4, (G.z1 + -50.3) / 2]} size={[0.5, 0.8, -50.3 - G.z1]} color="#2f9a3a" tex="grass" texScale={1} />
+        <Block key={x} position={[x, 0.4, (G.z1 + LEARNING_FRONT_Z + 0.2) / 2]} size={[0.5, 0.8, LEARNING_FRONT_Z + 0.2 - G.z1]} color="#2f9a3a" tex="grass" texScale={1} />
       ))}
 
       {/* flag */}

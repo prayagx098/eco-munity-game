@@ -14,7 +14,7 @@ import {
   type TaskKind,
   type TrashType,
 } from './gameData'
-import { BIN_SLOTS, HEAPS, LEARNING_BOARD, VEHICLES, MAKER_PADS, MAKER_YARD, initialVehicles, RESPAWN_DELAY, SCHOOL_NAME, BIN_CAP, TRUCK_INFO, jobTimes, type VehicleEntity, type VehicleKind, GARDEN_PLOTS, HOUSES, POND, SAPLING_SPOTS, STATIC_NPCS, TAPS, ZONES, collides, distToRect, offPath } from './world'
+import { BIN_SLOTS, HEAPS, LEARNING_BOARD, VEHICLES, MAKER_PADS, MAKER_YARD, initialVehicles, tidyVehicles, RESPAWN_DELAY, SCHOOL_NAME, BIN_CAP, TRUCK_INFO, jobTimes, type VehicleEntity, type VehicleKind, GARDEN_PLOTS, HOUSES, POND, SAPLING_SPOTS, STATIC_NPCS, TAPS, ZONES, collides, distToRect, offPath } from './world'
 import { act, ball, companionPos, dress, emitBurst, npcPositions, player, remotePlayers } from './sceneRegistry'
 import { filterMessage, isKind } from './chatBot'
 import { bridge } from './netBridge'
@@ -1658,6 +1658,7 @@ export const useGame = create<GameState>()((set, get) => {
       const tasks = rest.tasks.map((t) => (t.kind === 'explore' ? { ...t, progress: Math.max(t.progress, Math.min(t.target, s.visitedZones.length)) } : t))
       set({
         ...rest,
+        vehicles: tidyVehicles(rest.vehicles ?? []),
         tasks,
         ...(stats ? { stats } : {}),
       })

@@ -191,6 +191,17 @@ export interface VehicleEntity {
   home?: string
 }
 export const initialVehicles = (): VehicleEntity[] => STANDS.map((s) => ({ id: s.id, kind: s.kind, x: s.x, z: s.z, rot: s.rot, home: s.id }))
+/**
+ * Saved worlds can still hold vehicles from stands that no longer exist (or that were left on a carriageway).
+ * Drop those when a world is loaded so no bike is left standing in the middle of a road.
+ */
+export const tidyVehicles = (list: VehicleEntity[]): VehicleEntity[] =>
+  list.filter((v) => {
+    if (v.home && !STANDS.some((s) => s.id === v.home)) return false
+    if (v.id.startsWith('stand-') && !STANDS.some((s) => s.id === v.id)) return false
+    const onRoad = Math.abs(v.x - ROAD_X) < ROAD_W / 2 || ROADS_EW.some((r) => Math.abs(v.z - r.z) < ROAD_W / 2)
+    return !onRoad
+  })
 /** seconds before a taken vehicle is replaced at its stand (and only while nobody is looking) */
 export const RESPAWN_DELAY = 50
 export const RESPAWN_HIDDEN_DIST = 30
@@ -204,11 +215,13 @@ export const PIER = { x0: 54, x1: 59.5, z0: -1.2, z1: 1.2 }
  * The Learning Centre: a raised classroom deck set back from the road, reached by a paved forecourt, an entrance arch
  * and three steps. (Deck x -7..7, z -65.5..-56.5; forecourt in front of it down to the road.)
  */
-export const LEARNING_CORNER = rect(0, -61, 14, 9)
-export const LEARNING_BOARD: XZ = [0, -63.2]
-export const LEARNING_FORECOURT: Rect = { x0: -7.5, x1: 7.5, z0: LEARNING_CORNER.z1, z1: -50.2 }
+export const LEARNING_CORNER = rect(0, -65, 14, 9)
+/** z of the front edge of the forecourt, clear of the east–west road's footpath */
+export const LEARNING_FRONT_Z = -54.2
+export const LEARNING_BOARD: XZ = [0, -67.2]
+export const LEARNING_FORECOURT: Rect = { x0: -7.5, x1: 7.5, z0: LEARNING_CORNER.z1, z1: LEARNING_FRONT_Z + 0.1 }
 /** the arch over the entrance path */
-export const LEARNING_ARCH_Z = -53
+export const LEARNING_ARCH_Z = -57
 /** Areas where grass tufts should not grow */
 export const NO_GRASS: Rect[] = [
   BEACH,
@@ -416,7 +429,7 @@ const T = {
   sports: { label: '⚽ Sports Ground', x: -46, z: -3, color: '#15803d' },
   maple: { label: '🏘️ Maple Street', x: -31, z: -25, color: '#c2410c' },
   recycle: { label: '♻️ Eco Waste Hub', x: -56, z: -33, color: '#047857' },
-  learning: { label: '📚 Learning Corner', x: 0, z: -54, color: '#4338ca' },
+  learning: { label: '📚 Learning Corner', x: 0, z: -58, color: '#4338ca' },
   forest: { label: '🌲 Pine Forest', x: 38, z: -35, color: '#166534' },
   woods: { label: '🌳 Whispering Woods', x: 0, z: 42, color: '#15803d' },
   meadow: { label: '🦋 Butterfly Meadow', x: 40, z: 53, color: '#be185d' },
@@ -476,7 +489,7 @@ export const TREES: [number, number, number][] = TREES_ALL.filter(
     ROADS_EW.every((r) => Math.abs(z - r.z) > 7.5) &&
     !(x > 9.5 && x < 30.5 && z > -30.5 && z < -10) &&
     !(x > SCHOOL_BUILDING.x0 - 1.5 && x < SCHOOL_BUILDING.x1 + 1.5 && z > SCHOOL_BUILDING.z0 - 1.5 && z < SCHOOL_BUILDING.z1 + 1.5) &&
-    !(x > -10 && x < 10 && z < -49 && z > -70) &&
+    !(x > -10 && x < 10 && z < -53 && z > -74) &&
     !(x > 30 && x < 47 && z > -16 && z < -10) &&
     !(x > ECO_HUB.x0 - 3 && x < ECO_HUB.x1 + 3 && z > ECO_HUB.z0 - 3 && z < HUB_YARD.z1 + 3) &&
     !(x > STORE.x0 - 2.5 && x < STORE.x1 + 2.5 && z > STORE.z0 - 2.5 && z < MAKER_YARD.z1 + 2.5),
@@ -495,7 +508,7 @@ function marginTrees(): [number, number, number][] {
     if (ROADS_EW.some((r) => Math.abs(z - r.z) < 7.5)) continue
     if (z > RIVER.z0 - 2.5 && z < RIVER.z1 + 2.5) continue
     if (x > 53 && z > -25 && z < 31) continue // beach and sea
-    if (Math.abs(x) < 12 && z < -49) continue // the Learning Centre and its forecourt
+    if (Math.abs(x) < 12 && z < -53) continue // the Learning Centre and its forecourt
     if (x > 30 && x < 47 && z > -16 && z < -10) continue // the wind farm
     if (x > ECO_HUB.x0 - 4 && x < ECO_HUB.x1 + 4 && z > ECO_HUB.z0 - 4 && z < HUB_YARD.z1 + 4) continue // the Eco Waste Hub
     out.push([x, z, 0.9 + rnd() * 0.5])
@@ -695,10 +708,10 @@ const PROP_RECTS: Rect[] = [
   thin(LEARNING_CORNER.x0 - 0.1, LEARNING_CORNER.x0 + 0.1, LEARNING_CORNER.z0, LEARNING_CORNER.z1),
   thin(LEARNING_CORNER.x1 - 0.1, LEARNING_CORNER.x1 + 0.1, LEARNING_CORNER.z0, LEARNING_CORNER.z1),
   // hedges along the road edge of the forecourt (the entrance path stays open)
-  thin(LEARNING_FORECOURT.x0, -2.4, -50.7, -50.3),
-  thin(2.4, LEARNING_FORECOURT.x1, -50.7, -50.3),
-  thin(LEARNING_FORECOURT.x0 - 0.2, LEARNING_FORECOURT.x0 + 0.2, LEARNING_CORNER.z1, -50.3),
-  thin(LEARNING_FORECOURT.x1 - 0.2, LEARNING_FORECOURT.x1 + 0.2, LEARNING_CORNER.z1, -50.3),
+  thin(LEARNING_FORECOURT.x0, -2.4, LEARNING_FRONT_Z - 0.2, LEARNING_FRONT_Z + 0.2),
+  thin(2.4, LEARNING_FORECOURT.x1, LEARNING_FRONT_Z - 0.2, LEARNING_FRONT_Z + 0.2),
+  thin(LEARNING_FORECOURT.x0 - 0.2, LEARNING_FORECOURT.x0 + 0.2, LEARNING_CORNER.z1, LEARNING_FRONT_Z + 0.2),
+  thin(LEARNING_FORECOURT.x1 - 0.2, LEARNING_FORECOURT.x1 + 0.2, LEARNING_CORNER.z1, LEARNING_FRONT_Z + 0.2),
   // "road closed" barriers
   thin(ROAD_X - ROAD_W / 2, ROAD_X + ROAD_W / 2, -WORLD_HALF + 1.3, -WORLD_HALF + 1.5),
   thin(ROAD_X - ROAD_W / 2, ROAD_X + ROAD_W / 2, WORLD_HALF - 1.5, WORLD_HALF - 1.3),

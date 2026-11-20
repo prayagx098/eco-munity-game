@@ -90,8 +90,10 @@ const HOUSE_COLORS = [
 ]
 
 const TRIM = '#fbf6ee'
-const GLASS_DAY = new THREE.MeshStandardMaterial({ color: '#9fc7e6', roughness: 0.08, metalness: 0.5, transparent: true, opacity: 0.55 })
-const GLASS_LIT = new THREE.MeshStandardMaterial({ color: '#ffe9a8', emissive: '#ffcf6b', emissiveIntensity: 0.55, roughness: 0.2, transparent: true, opacity: 0.7 })
+const GLASS_DAY = new THREE.MeshStandardMaterial({ color: '#9fc7e6', roughness: 0.08, metalness: 0.4, transparent: true, opacity: 0.38 })
+const GLASS_LIT = new THREE.MeshStandardMaterial({ color: '#ffe9a8', emissive: '#ffcf6b', emissiveIntensity: 0.15, roughness: 0.2, transparent: true, opacity: 0.28 })
+const ROOM_LIT = new THREE.MeshStandardMaterial({ color: '#ffd98a', emissive: '#ffb84a', emissiveIntensity: 0.9 })
+const ROOM_OFF = new THREE.MeshStandardMaterial({ color: '#3a4252', roughness: 0.9 })
 const BULB_ON = new THREE.MeshStandardMaterial({ color: '#fff6c9', emissive: '#ffd23f', emissiveIntensity: 3.2 })
 const BULB_OFF = new THREE.MeshStandardMaterial({ color: '#d7dbe0', roughness: 0.3, transparent: true, opacity: 0.9 })
 
@@ -109,39 +111,48 @@ const gableGeo = (() => {
 
 /** A framed window on the road-facing wall: glass, white frame, cross bars, sill, shutters – and the light bulb you can see inside */
 function HouseWindow({ y, z, lit, wasted, shutter }: { y: number; z: number; lit: boolean; wasted: boolean; shutter: string }) {
+  const D = 0.24 // how far the frame stands out, leaving a shallow room behind the glass
   return (
     <group position={[1.7, y, z]}>
-      <Block position={[0.02, 0, 0]} size={[0.06, 1.0, 0.86]} color="#2b3441" cast={false} />
-      <mesh position={[0.06, 0, 0]} material={lit ? GLASS_LIT : GLASS_DAY}>
-        <boxGeometry args={[0.03, 0.82, 0.68]} />
+      {/* room behind the glass: warm when the light is on, dim otherwise */}
+      <mesh position={[0.03, 0, 0]} material={lit ? ROOM_LIT : ROOM_OFF}>
+        <boxGeometry args={[0.06, 0.84, 0.7]} />
       </mesh>
-      {/* frame + cross bars */}
-      <Block position={[0.08, 0.46, 0]} size={[0.05, 0.08, 0.86]} color={TRIM} cast={false} />
-      <Block position={[0.08, -0.46, 0]} size={[0.05, 0.08, 0.86]} color={TRIM} cast={false} />
-      <Block position={[0.08, 0, 0.42]} size={[0.05, 1.0, 0.08]} color={TRIM} cast={false} />
-      <Block position={[0.08, 0, -0.42]} size={[0.05, 1.0, 0.08]} color={TRIM} cast={false} />
-      <Block position={[0.09, 0, 0]} size={[0.03, 0.82, 0.04]} color={TRIM} cast={false} />
-      <Block position={[0.09, 0, 0]} size={[0.03, 0.04, 0.68]} color={TRIM} cast={false} />
-      {/* sill + shutters */}
-      <Block position={[0.18, -0.55, 0]} size={[0.22, 0.07, 1.04]} color="#cfc7bb" cast={false} />
-      {[-1, 1].map((sd) => (
-        <Block key={sd} position={[0.1, 0, sd * 0.66]} size={[0.05, 0.98, 0.3]} color={shutter} cast={false} />
-      ))}
-      {/* the bulb: a cord from the ceiling, a little shade and the bulb itself, set just behind the glass */}
-      <group position={[-0.28, 0, 0]}>
-        <mesh position={[0, 0.34, 0]}>
-          <cylinderGeometry args={[0.008, 0.008, 0.3, 5]} />
+      {/* the bulb: cord from the ceiling, shade and bulb – clearly visible through the glass */}
+      <group position={[0.12, 0, 0]}>
+        <mesh position={[0, 0.3, 0]}>
+          <cylinderGeometry args={[0.012, 0.012, 0.22, 5]} />
           <meshStandardMaterial color="#222" />
         </mesh>
         <mesh position={[0, 0.17, 0]}>
-          <cylinderGeometry args={[0.03, 0.11, 0.1, 10]} />
+          <cylinderGeometry args={[0.04, 0.12, 0.09, 10]} />
           <meshStandardMaterial color={wasted ? '#e11d48' : '#64748b'} />
         </mesh>
-        <mesh position={[0, 0.08, 0]} material={lit ? BULB_ON : BULB_OFF}>
-          <sphereGeometry args={[0.085, 14, 10]} />
+        <mesh position={[0, 0.07, 0]} material={lit ? BULB_ON : BULB_OFF}>
+          <sphereGeometry args={[0.1, 14, 10]} />
         </mesh>
-        {lit && <mesh position={[0, 0.08, 0]}><sphereGeometry args={[0.2, 12, 8]} /><meshBasicMaterial color="#ffe08a" transparent opacity={0.22} depthWrite={false} /></mesh>}
+        {lit && (
+          <mesh position={[0, 0.07, 0]}>
+            <sphereGeometry args={[0.22, 12, 8]} />
+            <meshBasicMaterial color="#ffe08a" transparent opacity={0.3} depthWrite={false} />
+          </mesh>
+        )}
       </group>
+      {/* glass, white frame and cross bars */}
+      <mesh position={[D, 0, 0]} material={lit ? GLASS_LIT : GLASS_DAY}>
+        <boxGeometry args={[0.02, 0.84, 0.7]} />
+      </mesh>
+      <Block position={[D / 2, 0.46, 0]} size={[D, 0.08, 0.86]} color={TRIM} cast={false} />
+      <Block position={[D / 2, -0.46, 0]} size={[D, 0.08, 0.86]} color={TRIM} cast={false} />
+      <Block position={[D / 2, 0, 0.42]} size={[D, 1.0, 0.08]} color={TRIM} cast={false} />
+      <Block position={[D / 2, 0, -0.42]} size={[D, 1.0, 0.08]} color={TRIM} cast={false} />
+      <Block position={[D + 0.01, 0, 0]} size={[0.03, 0.84, 0.04]} color={TRIM} cast={false} />
+      <Block position={[D + 0.01, 0, 0]} size={[0.03, 0.04, 0.7]} color={TRIM} cast={false} />
+      {/* sill + shutters */}
+      <Block position={[D + 0.06, -0.55, 0]} size={[0.3, 0.07, 1.04]} color="#cfc7bb" cast={false} />
+      {[-1, 1].map((sd) => (
+        <Block key={sd} position={[0.06, 0, sd * 0.66]} size={[0.05, 0.98, 0.3]} color={shutter} cast={false} />
+      ))}
     </group>
   )
 }
