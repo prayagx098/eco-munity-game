@@ -56,7 +56,8 @@ function GrowingTree({ x, z, plantedAt }: { x: number; z: number; plantedAt?: nu
   const tree = useRef<Group>(null)
   const sprout = useRef<Group>(null)
   useFrame(() => {
-    const age = plantedAt ? Math.max(0, (Date.now() - plantedAt) / 1000) : GROW_SECS
+    // saplings saved with an old epoch-ms timestamp (or none) count as fully grown
+    const age = plantedAt !== undefined && plantedAt < 1e9 ? Math.max(0, useGame.getState().elapsed - plantedAt) : GROW_SECS
     const t = Math.min(1, age / GROW_SECS)
     // stage 1 (first 12%): just a sprout; afterwards the tree swells with a gentle ease
     const tt = Math.max(0, (t - 0.12) / 0.88)

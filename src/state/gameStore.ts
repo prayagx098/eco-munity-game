@@ -63,7 +63,7 @@ export interface SaplingSpot {
   x: number
   z: number
   planted: boolean
-  /** epoch ms when it was planted – trees grow over a couple of minutes */
+  /** game-clock seconds (the host's shared `elapsed`) when it was planted, so every player sees the same growth */
   plantedAt?: number
 }
 
@@ -1491,7 +1491,7 @@ export const useGame = create<GameState>()((set, get) => {
             player.x = spot.x + Math.sin(angle) * safeDist
             player.z = spot.z + Math.cos(angle) * safeDist
           }
-          set({ saplings: s.saplings.map((p) => (p.id === spot.id ? { ...p, planted: true, plantedAt: Date.now() } : p)) })
+          set({ saplings: s.saplings.map((p) => (p.id === spot.id ? { ...p, planted: true, plantedAt: s.elapsed } : p)) })
           get().reward({ points: 15, energy: 5, happiness: 3, x: spot.x, z: spot.z, label: '+15 🌳' })
           get().progress(['plant-tree'])
           team('🌳', 'planted a tree!')

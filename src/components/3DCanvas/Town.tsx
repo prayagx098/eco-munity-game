@@ -3,9 +3,10 @@ import { InstancedTrees } from './InstancedTrees'
 import { InstancedFlowers } from './InstancedFlowers'
 import { LearningCentre } from './LearningCentre'
 import { useFrame } from '@react-three/fiber'
+import * as THREE from 'three'
 import type { Group, Mesh } from 'three'
 import { Block, Label, Marker, Near, Plastic, Sign3D, sharedMaterials, type V3 } from './primitives'
-import { useGame, getTownEcoStatus } from '../../state/gameStore'
+import { useGame, getTownEcoStatus, isNight } from '../../state/gameStore'
 import { env } from '../../state/sceneRegistry'
 import {
   BARN,
@@ -88,49 +89,173 @@ const HOUSE_COLORS = [
   ['#9ed8d0', '#3b8077'],
 ]
 
+const TRIM = '#fbf6ee'
+const GLASS_DAY = new THREE.MeshStandardMaterial({ color: '#9fc7e6', roughness: 0.08, metalness: 0.5, transparent: true, opacity: 0.55 })
+const GLASS_LIT = new THREE.MeshStandardMaterial({ color: '#ffe9a8', emissive: '#ffcf6b', emissiveIntensity: 0.55, roughness: 0.2, transparent: true, opacity: 0.7 })
+const BULB_ON = new THREE.MeshStandardMaterial({ color: '#fff6c9', emissive: '#ffd23f', emissiveIntensity: 3.2 })
+const BULB_OFF = new THREE.MeshStandardMaterial({ color: '#d7dbe0', roughness: 0.3, transparent: true, opacity: 0.9 })
+
+/** A gable end: a flat triangle that closes the roof above the wall */
+const gableGeo = (() => {
+  const sh = new THREE.Shape()
+  sh.moveTo(-1.7, 0)
+  sh.lineTo(1.7, 0)
+  sh.lineTo(0, 1.25)
+  sh.closePath()
+  const g = new THREE.ExtrudeGeometry(sh, { depth: 0.12, bevelEnabled: false })
+  g.translate(0, 0, -0.06)
+  return g
+})()
+
+/** A framed window on the road-facing wall: glass, white frame, cross bars, sill, shutters – and the light bulb you can see inside */
+function HouseWindow({ y, z, lit, wasted, shutter }: { y: number; z: number; lit: boolean; wasted: boolean; shutter: string }) {
+  return (
+    <group position={[1.7, y, z]}>
+      <Block position={[0.02, 0, 0]} size={[0.06, 1.0, 0.86]} color="#2b3441" cast={false} />
+      <mesh position={[0.06, 0, 0]} material={lit ? GLASS_LIT : GLASS_DAY}>
+        <boxGeometry args={[0.03, 0.82, 0.68]} />
+      </mesh>
+      {/* frame + cross bars */}
+      <Block position={[0.08, 0.46, 0]} size={[0.05, 0.08, 0.86]} color={TRIM} cast={false} />
+      <Block position={[0.08, -0.46, 0]} size={[0.05, 0.08, 0.86]} color={TRIM} cast={false} />
+      <Block position={[0.08, 0, 0.42]} size={[0.05, 1.0, 0.08]} color={TRIM} cast={false} />
+      <Block position={[0.08, 0, -0.42]} size={[0.05, 1.0, 0.08]} color={TRIM} cast={false} />
+      <Block position={[0.09, 0, 0]} size={[0.03, 0.82, 0.04]} color={TRIM} cast={false} />
+      <Block position={[0.09, 0, 0]} size={[0.03, 0.04, 0.68]} color={TRIM} cast={false} />
+      {/* sill + shutters */}
+      <Block position={[0.18, -0.55, 0]} size={[0.22, 0.07, 1.04]} color="#cfc7bb" cast={false} />
+      {[-1, 1].map((sd) => (
+        <Block key={sd} position={[0.1, 0, sd * 0.66]} size={[0.05, 0.98, 0.3]} color={shutter} cast={false} />
+      ))}
+      {/* the bulb: a cord from the ceiling, a little shade and the bulb itself, set just behind the glass */}
+      <group position={[-0.28, 0, 0]}>
+        <mesh position={[0, 0.34, 0]}>
+          <cylinderGeometry args={[0.008, 0.008, 0.3, 5]} />
+          <meshStandardMaterial color="#222" />
+        </mesh>
+        <mesh position={[0, 0.17, 0]}>
+          <cylinderGeometry args={[0.03, 0.11, 0.1, 10]} />
+          <meshStandardMaterial color={wasted ? '#e11d48' : '#64748b'} />
+        </mesh>
+        <mesh position={[0, 0.08, 0]} material={lit ? BULB_ON : BULB_OFF}>
+          <sphereGeometry args={[0.085, 14, 10]} />
+        </mesh>
+        {lit && <mesh position={[0, 0.08, 0]}><sphereGeometry args={[0.2, 12, 8]} /><meshBasicMaterial color="#ffe08a" transparent opacity={0.22} depthWrite={false} /></mesh>}
+      </group>
+    </group>
+  )
+}
+
 function House({ id, x, z, i }: { id: string; x: number; z: number; i: number }) {
   const wasted = useGame((s) => s.lights[id])
+  const night = useGame((s) => isNight(s.clock))
   const stats = useGame((s) => s.stats)
   const eco = getTownEcoStatus(stats)
   const hasSolar = eco.tier >= 3 || (eco.tier === 2 && i % 2 === 0)
   const [color, roof] = HOUSE_COLORS[i % HOUSE_COLORS.length]
   const h = 3.4 + (i % 3) * 0.9
-  const win = wasted ? sharedMaterials.wastedLight : sharedMaterials.windowGlow
+  const two = h > 4
+  const lit = !!wasted || night
+  const rise = 1.25
+  const ang = Math.atan2(rise, 1.95)
+  const slope = Math.hypot(1.95, rise) + 0.1
   return (
     <group position={[x, 0, z]}>
-      <Block position={[0, h / 2, 0]} size={[3.4, h, 5]} color={color} tex="brick" texScale={1.6} />
-      <group position={[0, h + 0.7, 0]} scale={[1, 1, 1.47]}>
-        <mesh rotation={[0, Math.PI / 4, 0]} castShadow>
-          <cylinderGeometry args={[0.01, 2.6, 1.4, 4, 1]} />
-          <Plastic color={roof} />
-        </mesh>
-      </group>
+      {/* plinth, walls, corner posts */}
+      <Block position={[0, 0.12, 0]} size={[3.7, 0.24, 5.3]} color="#b9b2a6" tex="paving" texScale={1.2} />
+      <Block position={[0, 0.24 + (h - 0.24) / 2, 0]} size={[3.4, h - 0.24, 5]} color={color} roughness={0.85} />
+      <Block position={[0, 0.5, 0]} size={[3.46, 0.5, 5.06]} color={roof} roughness={0.9} />
+      {[-1, 1].flatMap((sx) => [-1, 1].map((sz) => <Block key={`${sx}${sz}`} position={[sx * 1.7, h / 2, sz * 2.5]} size={[0.16, h, 0.16]} color={TRIM} cast={false} />))}
+      {two && <Block position={[0, 2.35, 0]} size={[3.5, 0.12, 5.1]} color={TRIM} cast={false} />}
 
-      {/* Dynamic Evolution: Clean Solar Panels on roof */}
-      {hasSolar && (
-        <group position={[0.55, h + 0.95, 0.4]} rotation={[0, 0, -0.48]}>
-          <Block position={[0, 0, 0]} size={[1.15, 0.05, 1.85]} color="#0f172a" />
-          <Block position={[0, 0.03, 0]} size={[1.08, 0.02, 1.76]} color="#1e3a8a" />
-          {[-0.45, 0, 0.45].map((gz) => (
-            <Block key={gz} position={[0, 0.04, gz]} size={[1.04, 0.01, 0.02]} color="#60a5fa" />
-          ))}
-          <pointLight position={[0, 0.2, 0]} color="#38bdf8" intensity={0.35} distance={2.5} />
+      {/* gabled roof with overhang, ridge cap and end triangles */}
+      {[-1, 1].map((sd) => (
+        <Block key={sd} position={[sd * 0.97, h + rise / 2 + 0.02, 0]} size={[slope, 0.14, 5.5]} color={roof} tex="roof" texScale={2} rotation={[0, 0, -sd * ang]} />
+      ))}
+      <Block position={[0, h + rise + 0.1, 0]} size={[0.2, 0.12, 5.6]} color={TRIM} />
+      {[-1, 1].map((sz) => (
+        <mesh key={sz} geometry={gableGeo} position={[0, h, sz * 2.5]} castShadow>
+          <meshStandardMaterial color={color} roughness={0.85} />
+        </mesh>
+      ))}
+      {/* little attic window in the gable facing the street side */}
+      <mesh position={[0, h + 0.45, 2.57]} material={lit ? GLASS_LIT : GLASS_DAY}>
+        <circleGeometry args={[0.24, 14]} />
+      </mesh>
+      <mesh position={[0, h + 0.45, 2.565]}>
+        <ringGeometry args={[0.24, 0.31, 14]} />
+        <meshStandardMaterial color={TRIM} />
+      </mesh>
+      {/* chimney */}
+      {i % 2 === 0 && (
+        <group position={[-0.7, h + 0.9, -1.3]}>
+          <Block position={[0, 0, 0]} size={[0.55, 1.5, 0.55]} color="#a35a46" tex="brick" texScale={1} />
+          <Block position={[0, 0.8, 0]} size={[0.7, 0.1, 0.7]} color="#6b3b2c" />
         </group>
       )}
 
-      {/* door faces the road (+x) */}
-      <Block position={[1.72, 0.8, 1]} size={[0.06, 1.6, 0.9]} color="#3f6fb5" />
-      <Block position={[1.72, 1.3, -1.2]} size={[0.06, 0.8, 0.9]} material={win} color="" />
-      <Block position={[1.72, h - 1, 1]} size={[0.06, 0.8, 0.9]} material={win} color="" />
-      <Block position={[1.72, h - 1, -1.2]} size={[0.06, 0.8, 0.9]} material={win} color="" />
-      <Block position={[0.6, h / 2, 2.52]} size={[1, 0.8, 0.06]} material={win} color="" />
-      {/* front path */}
-      <Block position={[2.6, 0.06, 1]} size={[1.8, 0.06, 1]} color="#d8d2c8" cast={false} />
-      {i % 2 === 0 && <Block position={[-0.6, h + 1.3, -1.2]} size={[0.6, 1.2, 0.6]} color="#7f1d1d" />}
+      {hasSolar && (
+        <group position={[0.97, h + rise / 2 + 0.12, 0.3]} rotation={[0, 0, -ang]}>
+          <Block position={[0, 0, 0]} size={[1.5, 0.05, 2.2]} color="#0f172a" />
+          <Block position={[0, 0.03, 0]} size={[1.42, 0.02, 2.1]} color="#1e3a8a" />
+          {[-0.7, -0.35, 0, 0.35, 0.7].map((gz) => (
+            <Block key={gz} position={[0, 0.045, gz]} size={[1.4, 0.01, 0.02]} color="#60a5fa" />
+          ))}
+        </group>
+      )}
+
+      {/* front door with frame, knob, step and a little porch roof */}
+      <Block position={[1.72, 0.95, 1]} size={[0.06, 1.7, 1.1]} color={TRIM} cast={false} />
+      <Block position={[1.76, 0.85, 1]} size={[0.06, 1.55, 0.86]} color={roof} roughness={0.6} />
+      <Block position={[1.8, 1.25, 1]} size={[0.03, 0.3, 0.5]} color="#2b3441" cast={false} />
+      <mesh position={[1.82, 0.85, 0.7]}>
+        <sphereGeometry args={[0.05, 8, 6]} />
+        <meshStandardMaterial color="#e5b64a" metalness={0.8} roughness={0.25} />
+      </mesh>
+      <Block position={[2.05, 0.1, 1]} size={[0.7, 0.2, 1.5]} color="#cfc7bb" cast={false} />
+      <Block position={[2.12, 2.12, 1]} size={[0.8, 0.1, 1.7]} color={roof} />
+      {[-1, 1].map((sd) => (
+        <Block key={sd} position={[2.42, 1.1, 1 + sd * 0.72]} size={[0.08, 2.0, 0.08]} color={TRIM} cast={false} />
+      ))}
+      {/* porch lantern: you can see the bulb */}
+      <group position={[1.82, 1.85, 0.05]}>
+        <Block position={[0, 0.05, 0]} size={[0.06, 0.06, 0.06]} color="#2b3441" cast={false} />
+        <mesh position={[0.06, -0.06, 0]} material={lit ? BULB_ON : BULB_OFF}>
+          <sphereGeometry args={[0.09, 12, 10]} />
+        </mesh>
+        <mesh position={[0.06, -0.06, 0]}>
+          <boxGeometry args={[0.2, 0.26, 0.2]} />
+          <meshStandardMaterial color="#cbd5e1" transparent opacity={0.25} />
+        </mesh>
+      </group>
+
+      {/* road-facing windows */}
+      <HouseWindow y={1.55} z={-1.2} lit={lit} wasted={!!wasted} shutter={roof} />
+      {two && <HouseWindow y={3.15} z={1} lit={lit} wasted={!!wasted} shutter={roof} />}
+      {two && <HouseWindow y={3.15} z={-1.2} lit={lit} wasted={!!wasted} shutter={roof} />}
+      {/* side window */}
+      <Block position={[0.6, h / 2 + 0.2, 2.52]} size={[1, 0.8, 0.05]} color={TRIM} cast={false} />
+      <mesh position={[0.6, h / 2 + 0.2, 2.56]} material={lit ? GLASS_LIT : GLASS_DAY}>
+        <boxGeometry args={[0.86, 0.66, 0.03]} />
+      </mesh>
+
+      {/* front garden: stepping path, low hedges and a mailbox */}
+      <Block position={[2.6, 0.05, 1]} size={[1.4, 0.06, 1.0]} color="#d8d2c8" cast={false} tex="paving" texScale={1.5} />
+      {[-0.95, 2.95].map((gz) => (
+        <mesh key={gz} position={[2.3, 0.3, gz]} castShadow>
+          <sphereGeometry args={[0.4, 10, 8]} />
+          <meshStandardMaterial color="#4d9a45" roughness={0.9} />
+        </mesh>
+      ))}
+      <group position={[2.6, 0, -1.8]}>
+        <Block position={[0, 0.4, 0]} size={[0.06, 0.8, 0.06]} color="#8f5527" cast={false} />
+        <Block position={[0, 0.85, 0]} size={[0.28, 0.2, 0.4]} color="#ef4444" cast={false} />
+      </group>
+
       {wasted && (
         <Near x={x} z={z} r={20}>
-          <pointLight position={[2.4, 1.6, 0]} color="#ffd23f" intensity={6} distance={5} />
-          <Label position={[2, h + 1.2, 0]}>
+          <pointLight position={[2.4, 1.6, -1]} color="#ffd23f" intensity={6} distance={5} />
+          <Label position={[2, h + 1.8, 0]}>
             <Marker emoji="💡" text="Nobody home!" color="bg-yellow-200" />
           </Label>
         </Near>

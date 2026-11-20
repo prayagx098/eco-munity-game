@@ -143,7 +143,7 @@ export const WIND_TURBINES: XZ[] = [
 ]
 
 export const HOUSE_ZS = [-40, -31, -22, -13, -4, 5, 14, 23]
-export const HOUSE_X = -31
+export const HOUSE_X = -33
 export const HOUSES = HOUSE_ZS.map((z, i) => ({ id: `house-${i}`, x: HOUSE_X, z, door: [HOUSE_X + 2, z + 1] as XZ }))
 
 export const GARDEN_PLOTS = [
@@ -590,11 +590,11 @@ export const PATHS: Rect[] = [
   { x0: -13, x1: -11, z0: -27, z1: -1.5 }, // to recycling center
   { x0: 33, x1: 35, z0: 1.5, z1: 11 }, // to barn
   // a short front path from every house door out to the pavement
-  ...HOUSES.map((h) => ({ x0: h.door[0] - 0.4, x1: -27.7, z0: h.door[1] - 0.6, z1: h.door[1] + 0.6 })),
+  ...HOUSES.map((h) => ({ x0: h.door[0] - 0.4, x1: ROAD_X - ROAD_W / 2 - WALK_W + 0.1, z0: h.door[1] - 0.6, z1: h.door[1] + 0.6 })),
   // footpath from the crossing, between the houses and behind them to the school gate
-  { x0: -34.8, x1: -27.8, z0: -1, z1: 2 },
-  { x0: -34.85, x1: -33.15, z0: -19.9, z1: 2 },
-  { x0: -43.5, x1: -33.15, z0: -19.9, z1: -18.2 },
+  { x0: -36.6, x1: -27.8, z0: -1, z1: 2 },
+  { x0: -36.6, x1: -34.9, z0: -19.9, z1: 2 },
+  { x0: -43.5, x1: -34.9, z0: -19.9, z1: -18.2 },
   { x0: 1.5, x1: STORE.x0 - 0.2, z0: -37.6, z1: -35.4 }, // to the store door
   { x0: 1.5, x1: MAKER_YARD.x1, z0: MAKER_YARD.z0, z1: MAKER_YARD.z1 }, // the maker yard
   ...SCHOOL_WALKWAY,
