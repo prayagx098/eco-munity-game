@@ -8,6 +8,7 @@ import { SCHOOL_FIELD, groundY, type VehicleKind } from '../../state/world'
 import { Label } from './primitives'
 import { VehicleMesh } from './Vehicles'
 import { RemotePet } from './Animals'
+import { useVoice } from '../../net/voice'
 import { Minifig, SpeechBubble, type MinifigAnim } from './NPCs'
 import { TrashShape } from './TrashItems'
 import { emitPuff } from './Weather'
@@ -26,6 +27,7 @@ function RemotePlayer({ id, profile }: { id: string; profile: Profile }) {
   const body = useRef<Group>(null)
   const vehRef = useRef<Group>(null)
   const nearby = useGame((s) => s.nearbyMate === id)
+  const talking = useVoice((v) => !!v.speaking[id])
 
   useFrame((_, rawDt) => {
     const g = group.current
@@ -54,6 +56,7 @@ function RemotePlayer({ id, profile }: { id: string; profile: Profile }) {
     anim.current.speed += ((r.moving ? (r.running ? 1.6 : 1) : 0) - anim.current.speed) * Math.min(1, dt * 10)
     anim.current.armsUp = !!r.carry && !r.vehicle
     anim.current.ride = !!r.vehicle
+    anim.current.rideKind = r.vehicle ?? undefined
     // the gesture they are playing (watering, planting, kicking…)
     anim.current.act = r.act ? { kind: r.act.kind, p: r.act.p } : null
     anim.current.jump = Math.min(1, jumpY.current / 0.7)
@@ -94,7 +97,7 @@ function RemotePlayer({ id, profile }: { id: string; profile: Profile }) {
       <SpeechBubble id={id} y={2.6} />
       <Label position={[0, 2.05, 0]}>
         <div className="flex items-center gap-1 whitespace-nowrap rounded-full bg-cyan-300 px-2 text-xs font-bold text-slate-900 shadow ring-2 ring-white">
-          🧑 {profile.name}
+          {talking ? '🔊' : '🧑'} {profile.name}
           {nearby && <span className="rounded-full bg-indigo-500 px-1 text-[10px] text-white">C 💬</span>}
         </div>
       </Label>

@@ -234,6 +234,7 @@ export function Player() {
     anim.current.speed += (speedTarget - anim.current.speed) * Math.min(1, dt * 10)
     anim.current.armsUp = !!s.carrying && !player.vehicle
     anim.current.ride = !!player.vehicle
+    anim.current.rideKind = player.vehicle ?? undefined
     // eco-miles: every stretch you ride earns a little reward
     if (player.odo < lastOdo.current) lastOdo.current = 0
     if (player.vehicle && player.odo - lastOdo.current >= 80) {

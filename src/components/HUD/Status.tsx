@@ -3,6 +3,7 @@ import { useGame, clockLabel, dayPhase, isNight, getTownEcoStatus } from '../../
 import { useUI } from '../../state/ui'
 import { useStory } from '../../state/story'
 import { useMeta } from '../../state/meta'
+import { useVoice } from '../../net/voice'
 import { useView, VIEW_LABELS } from '../../state/viewMode'
 import { Icon, type IconName } from '../UI/Icons'
 import { isFullscreen, toggleFullscreen } from '../../utils/fullscreen'
@@ -121,11 +122,14 @@ export function Dock({ onSettings, settingsOpen }: { onSettings: () => void; set
   const setPanel = useMeta((m) => m.setPanel)
   const claimable = useMeta((m) => m.missions.filter((x) => !x.claimed && x.got >= x.n).length)
   const open = useMeta((m) => m.missions.filter((x) => !x.claimed).length)
+  const voiceOn = useVoice((v) => v.enabled)
+  const voiceBusy = useVoice((v) => v.busy)
   return (
     <div className="glass pointer-events-auto grid grid-cols-4 gap-0.5 p-0.5 sm:p-1 sm:flex sm:items-center sm:gap-0.5 shadow-lg">
       <DockButton icon="tasks" label="Tasks (T)" onClick={() => setTasks()} active={tasksOpen} badge={`${done}/${tasks.length}`} />
       <DockButton icon="book" label="Story book (J)" onClick={() => setBook()} active={bookOpen} badge={`${sparks}/7`} />
       <DockButton icon="target" label="Daily missions, home & trees (P)" onClick={() => setPanel(panel ? null : 'missions')} active={!!panel} badge={claimable > 0 ? `${claimable}✓` : open || undefined} />
+      <DockButton icon="mic" label={voiceOn ? 'Leave voice chat' : 'Join voice chat (hold G to talk)'} onClick={() => (voiceOn ? useVoice.getState().leave() : void useVoice.getState().join())} active={voiceOn || voiceBusy} badge={voiceOn ? '●' : undefined} />
       <DockButton icon="bag" label="Backpack (I)" onClick={() => setInv()} active={invOpen} badge={coins} />
       <DockButton icon="award" label="Badges (B)" onClick={() => toggleBadges(true)} badge={badges || undefined} />
       <DockButton icon="camera" label={`Camera: ${VIEW_LABELS[mode].name} (V)`} onClick={cycle} />

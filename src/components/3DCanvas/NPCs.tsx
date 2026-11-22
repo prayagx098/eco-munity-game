@@ -47,6 +47,8 @@ export interface MinifigAnim {
   talk?: boolean
   /** sitting on a bike / scooter / cart */
   ride?: boolean
+  /** what they are riding: sitting on a bike, standing on a scooter, or surfing a board */
+  rideKind?: 'bike' | 'scooter' | 'board'
   /** head turn toward something (radians, relative to the body) */
   look?: number
   /** a one-off gesture: kind + progress 0..1 */
@@ -145,9 +147,20 @@ export function Minifig({ shirt, pants, hair, anim, longHair, shirt2, shirtId, p
     const swing = Math.sin(t * (a.speed > 1.2 ? 13 : 9)) * 0.7 * Math.min(1, a.speed)
     const phase = t + seed.current
     if (a.ride) {
-      // seated: knees forward, feet resting – no pedalling
-      if (legL.current) legL.current.rotation.x = -1.15
-      if (legR.current) legR.current.rotation.x = -1.15
+      const rk = a.rideKind ?? 'bike'
+      if (rk === 'scooter') {
+        // standing tall on the deck: one foot forward, one back
+        if (legL.current) legL.current.rotation.x = -0.16
+        if (legR.current) legR.current.rotation.x = 0.24
+      } else if (rk === 'board') {
+        // board stance: knees bent, feet apart front and back
+        if (legL.current) legL.current.rotation.x = -0.6
+        if (legR.current) legR.current.rotation.x = 0.62
+      } else {
+        // seated: knees forward, feet resting – no pedalling
+        if (legL.current) legL.current.rotation.x = -1.15
+        if (legR.current) legR.current.rotation.x = -1.15
+      }
     } else {
       if (legL.current) legL.current.rotation.x = swing
       if (legR.current) legR.current.rotation.x = -swing
@@ -183,7 +196,12 @@ export function Minifig({ shirt, pants, hair, anim, longHair, shirt2, shirtId, p
       const step = Math.sin(t * (a.speed > 1.2 ? 13 : 9))
       root.current.position.y = Math.abs(step) * 0.055 * sp
       root.current.rotation.z = step * 0.05 * sp
-      root.current.rotation.x = (a.speed > 1.2 && !a.ride ? 0.14 : 0) * Math.min(1, a.speed - 1)
+      const rk = a.rideKind ?? 'bike'
+      // standing riders lean into the ride: a little on the scooter, a clear forward crouch + twist on the board
+      const goal = a.ride ? (rk === 'board' ? 0.2 + Math.min(0.12, a.speed * 0.1) : rk === 'scooter' ? 0.07 : 0) : (a.speed > 1.2 ? 0.14 : 0) * Math.min(1, a.speed - 1)
+      root.current.rotation.x += (goal - root.current.rotation.x) * Math.min(1, dt * 10)
+      const twist = a.ride && rk === 'board' ? 0.55 : 0
+      root.current.rotation.y += (twist - root.current.rotation.y) * Math.min(1, dt * 10)
     }
     if (soleGlow.current) soleGlow.current.emissiveIntensity = 0.9 + 0.7 * Math.sin(t * 5) * Math.min(1, 0.4 + a.speed)
     // cape and wings move with you
@@ -209,8 +227,9 @@ export function Minifig({ shirt, pants, hair, anim, longHair, shirt2, shirtId, p
       head.current.rotation.y += (want - head.current.rotation.y) * Math.min(1, dt * 6)
     }
     // base pose (walking / carrying / waving / jumping)
-    let aL = a.ride ? -0.95 : a.armsUp ? -Math.PI * 0.45 : -swing * 0.8
-    let aR = a.ride ? -0.95 : a.armsUp ? -Math.PI * 0.45 : a.wave ? -Math.PI * 0.8 + Math.sin(t * 10) * 0.3 : swing * 0.8
+    const rideArm = a.rideKind === 'scooter' ? -1.25 : a.rideKind === 'board' ? -0.25 : -0.95
+    let aL = a.ride ? rideArm : a.armsUp ? -Math.PI * 0.45 : -swing * 0.8
+    let aR = a.ride ? rideArm : a.armsUp ? -Math.PI * 0.45 : a.wave ? -Math.PI * 0.8 + Math.sin(t * 10) * 0.3 : swing * 0.8
     let lean = 0
     let nod = 0
     if (a.talk && !a.act) {
@@ -236,11 +255,11 @@ export function Minifig({ shirt, pants, hair, anim, longHair, shirt2, shirtId, p
     lean += (b.lean - lean) * b.w
     if (armL.current) {
       armL.current.rotation.x = aL
-      armL.current.rotation.z = J.az * J.w
+      armL.current.rotation.z = J.az * J.w + (a.ride && a.rideKind === 'board' ? 0.85 : 0)
     }
     if (armR.current) {
       armR.current.rotation.x = aR
-      armR.current.rotation.z = -J.az * J.w
+      armR.current.rotation.z = -J.az * J.w - (a.ride && a.rideKind === 'board' ? 0.85 : 0)
     }
     if (upper.current) upper.current.rotation.x = lean + nod
   })

@@ -1,3 +1,4 @@
+import { VoiceBar } from './VoiceBar'
 import { lazy, Suspense, useState } from 'react'
 import { useGame } from '../../state/gameStore'
 import { StatsBar } from './StatsBar'
@@ -73,6 +74,7 @@ export function HUD() {
       <TouchControls />
 
       <TaskPopup />
+      <VoiceBar />
       <StoryBook />
       <StoryDialog />
       <Suspense fallback={null}>

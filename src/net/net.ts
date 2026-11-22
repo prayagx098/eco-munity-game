@@ -15,6 +15,7 @@ import { bridge, type Msg } from '../state/netBridge'
 import { useGame, type Action, type Profile, type RemoteEvent, type WorldSnapshot } from '../state/gameStore'
 import { act, ballNet, companionPos, duckFeeds, emitBurst, hostNpcs, lastBellRing, player, remotePlayers } from '../state/sceneRegistry'
 import { sfx } from '../audio/audio'
+import { onVoiceSignal, useVoice, voicePeerLeft } from './voice'
 
 interface Peer {
   id: string
@@ -328,6 +329,7 @@ function handle(m: Record<string, unknown>) {
     case 'bye':
       peers.delete(from)
       remotePlayers.delete(from)
+      voicePeerLeft(from)
       break
     case 'pos': {
       const prev = remotePlayers.get(from)
@@ -341,6 +343,7 @@ function handle(m: Record<string, unknown>) {
         vehicle: (m.v as VehicleKind | null) ?? null,
         jump: (m.j as number) ?? 0,
         act: m.a ? { kind: String(m.a), p: Number(m.ap) || 0 } : null,
+        voice: !!m.vc,
         pet: m.pk ? { kind: m.pk as 'dog' | 'cat' | 'duck', name: String(m.pn ?? ''), x: Number(m.px), z: Number(m.pz), h: Number(m.ph) || 0, moving: !!m.pm, waiting: !!m.pw } : null,
         seen: Date.now(),
       })
@@ -384,6 +387,10 @@ function handle(m: Record<string, unknown>) {
       bridge.worldDirty()
       return
     }
+    case 'rtc':
+      // voice connection set-up, only for me
+      if (m.to === bridge.myId) void onVoiceSignal(from, String(m.k), m.d)
+      return
     case 'fx': {
       // a little effect from a nearby player (petting, bell, feeding): only bother if it is close to me
       const x = Number(m.x)
@@ -488,6 +495,7 @@ export function startNet() {
       v: player.vehicle,
       j: Math.round(airborne.h * 100) / 100,
       // the gesture I'm playing, so others see me water / plant / kick too
+      vc: useVoice.getState().enabled ? 1 : undefined,
       a: act.kind || undefined,
       ap: act.kind ? Math.round(Math.min(1, act.t / Math.max(0.1, act.dur)) * 100) / 100 : undefined,
       // my companion pet follows me on everyone's screen

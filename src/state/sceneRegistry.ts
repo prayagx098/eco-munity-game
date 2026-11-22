@@ -88,6 +88,8 @@ export interface RemoteSnapshot {
   jump: number
   /** the gesture they are playing right now (watering, planting…) and how far through it they are */
   act?: { kind: string; p: number } | null
+  /** they joined voice chat */
+  voice?: boolean
   /** their companion pet, so everybody sees it */
   pet?: { kind: 'dog' | 'cat' | 'duck'; name: string; x: number; z: number; h: number; moving: boolean; waiting: boolean } | null
   seen: number
