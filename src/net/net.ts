@@ -13,7 +13,8 @@
 import { airborne, type VehicleKind } from '../state/world'
 import { bridge, type Msg } from '../state/netBridge'
 import { useGame, type Action, type Profile, type RemoteEvent, type WorldSnapshot } from '../state/gameStore'
-import { hostNpcs, player, remotePlayers } from '../state/sceneRegistry'
+import { act, ballNet, companionPos, duckFeeds, emitBurst, hostNpcs, lastBellRing, player, remotePlayers } from '../state/sceneRegistry'
+import { sfx } from '../audio/audio'
 
 interface Peer {
   id: string
@@ -35,6 +36,47 @@ let channel: BroadcastChannel | null = null
 let ws: WebSocket | null = null
 let wsConnected = false
 let duplicate = false
+let takeoverNext = false
+let lastRawUrl = ''
+
+/** identifies this browser tab (kept across reloads and reconnects), so a reconnect is never mistaken for a second device */
+const TAB_ID = (() => {
+  try {
+    let id = sessionStorage.getItem('eco-munity-tab')
+    if (!id) {
+      id = Math.random().toString(36).slice(2, 12) + Date.now().toString(36)
+      sessionStorage.setItem('eco-munity-tab', id)
+    }
+    return id
+  } catch {
+    return Math.random().toString(36).slice(2, 12)
+  }
+})()
+
+/** "Log out of all other devices and play here": ends the account's other logins, then reconnects taking the place */
+export async function takeOverRoom(): Promise<boolean> {
+  const base = getApiBase()
+  const token = (() => {
+    try {
+      return localStorage.getItem('eco-munity-token')
+    } catch {
+      return null
+    }
+  })()
+  try {
+    if (base && token) {
+      const r = await fetch(`${base}/api/me/logout-others`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+      if (!r.ok) return false
+    }
+  } catch {
+    return false
+  }
+  duplicate = false
+  takeoverNext = true
+  useGame.setState({ netStatus: 'waking' })
+  if (lastRawUrl) initWebSocket(lastRawUrl)
+  return true
+}
 let worldTimer: ReturnType<typeof setTimeout> | null = null
 
 export const DEFAULT_RELAY_URL = 'wss://eco-munity-game.onrender.com'
@@ -99,6 +141,7 @@ function startKeepAlive(rawUrl: string) {
 }
 
 function initWebSocket(rawUrl: string) {
+  lastRawUrl = rawUrl
   try {
     const fullUrl = resolveWsUrl(rawUrl)
     const urlObj = new URL(fullUrl)
@@ -135,7 +178,8 @@ function initWebSocket(rawUrl: string) {
       clearTimeout(wakeTimer)
       // first message: who am I (a logged-in account can only be in a room once)
       try {
-        ws?.send(JSON.stringify({ t: 'auth', token: localStorage.getItem('eco-munity-token') }))
+        ws?.send(JSON.stringify({ t: 'auth', token: localStorage.getItem('eco-munity-token'), tab: TAB_ID, takeover: takeoverNext }))
+        takeoverNext = false
       } catch {
         // ignore
       }
@@ -158,6 +202,12 @@ function initWebSocket(rawUrl: string) {
     ws.onmessage = (ev) => {
       try {
         const data = typeof ev.data === 'string' ? JSON.parse(ev.data) : JSON.parse(new TextDecoder().decode(ev.data))
+        if (data.t === 'kicked') {
+          // this account was signed in on another device: this one is logged out
+          duplicate = true
+          window.dispatchEvent(new CustomEvent('eco-kicked'))
+          return
+        }
         if (data.t === 'duplicate') {
           duplicate = true
           useGame.setState({ netStatus: 'duplicate' })
@@ -171,7 +221,7 @@ function initWebSocket(rawUrl: string) {
 
     ws.onclose = (ev) => {
       wsConnected = false
-      if (ev.code === 4001 || duplicate) {
+      if (ev.code === 4001 || ev.code === 4002 || duplicate) {
         // this account is already in the room somewhere else: do not reconnect
         duplicate = true
         useGame.setState({ netStatus: 'duplicate' })
@@ -290,6 +340,8 @@ function handle(m: Record<string, unknown>) {
         carry: (m.c as string) ?? null,
         vehicle: (m.v as VehicleKind | null) ?? null,
         jump: (m.j as number) ?? 0,
+        act: m.a ? { kind: String(m.a), p: Number(m.ap) || 0 } : null,
+        pet: m.pk ? { kind: m.pk as 'dog' | 'cat' | 'duck', name: String(m.pn ?? ''), x: Number(m.px), z: Number(m.pz), h: Number(m.ph) || 0, moving: !!m.pm, waiting: !!m.pw } : null,
         seen: Date.now(),
       })
       if (!prev) syncRemotes()
@@ -323,10 +375,40 @@ function handle(m: Record<string, unknown>) {
       const peer = peers.get(from)
       const pos = remotePlayers.get(from)
       const r = s.performAction(m.a as Action, { id: from, name: peer?.profile.name ?? 'Player', x: pos?.x ?? 0, z: pos?.z ?? 0 })
+      // the town's eco score is a TEAM total: count what this player just did on the host too
+      if (r?.stat) {
+        const add = r.stat as Record<string, number>
+        useGame.setState((st) => ({ stats: Object.fromEntries(Object.entries(st.stats).map(([k, v]) => [k, v + (add[k] ?? 0)])) as unknown as typeof st.stats }))
+      }
       post({ t: 'ev', to: from, e: { kind: 'result', r: r ?? {} } satisfies RemoteEvent })
       bridge.worldDirty()
       return
     }
+    case 'fx': {
+      // a little effect from a nearby player (petting, bell, feeding): only bother if it is close to me
+      const x = Number(m.x)
+      const z = Number(m.z)
+      if (!Number.isFinite(x) || !Number.isFinite(z) || Math.hypot(x - player.x, z - player.z) > 45) return
+      if (m.k === 'pet') {
+        emitBurst({ x, z, y: 0.9, color: '#f472b6', n: 8, spread: 0.8, size: 0.07 })
+        s.addFloater({ x, z, text: '💖', color: '#ec4899' })
+        sfx('chat')
+      } else if (m.k === 'bell') {
+        lastBellRing.time = Date.now()
+        lastBellRing.x = x
+        lastBellRing.z = z
+        sfx('bike-bell')
+      } else if (m.k === 'feed') {
+        duckFeeds.push({ id: Date.now() + Math.random(), x, z, time: Date.now() })
+        if (duckFeeds.length > 8) duckFeeds.shift()
+        sfx('splash')
+      }
+      return
+    }
+    case 'ball':
+      // the host's football position: everyone else glides the ball towards it
+      if (from === bridge.hostId && !bridge.isHost) Object.assign(ballNet, { x: m.x, z: m.z, y: m.y, vx: m.vx, vz: m.vz, vy: m.vy, at: performance.now() })
+      return
     case 'ev':
       if (from !== bridge.hostId) return
       if (m.to === 'all' || m.to === bridge.myId) s.onRemoteEvent(m.e as RemoteEvent)
@@ -394,6 +476,7 @@ export function startNet() {
   setInterval(() => {
     if (!playing() || peers.size === 0) return
     const c = useGame.getState().carrying
+    const comp = useGame.getState().companion
     post({
       t: 'pos',
       x: Math.round(player.x * 100) / 100,
@@ -404,6 +487,11 @@ export function startNet() {
       c: c ? (c.typeId) : null,
       v: player.vehicle,
       j: Math.round(airborne.h * 100) / 100,
+      // the gesture I'm playing, so others see me water / plant / kick too
+      a: act.kind || undefined,
+      ap: act.kind ? Math.round(Math.min(1, act.t / Math.max(0.1, act.dur)) * 100) / 100 : undefined,
+      // my companion pet follows me on everyone's screen
+      ...(comp ? { pk: comp.kind, pn: comp.name, px: Math.round(companionPos.x * 100) / 100, pz: Math.round(companionPos.z * 100) / 100, ph: Math.round(companionPos.heading * 100) / 100, pm: companionPos.moving ? 1 : 0, pw: companionPos.waiting ? 1 : 0 } : {}),
     })
   }, 100)
 

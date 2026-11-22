@@ -33,6 +33,17 @@ interface AuthState {
 
 const TOKEN_KEY = 'eco-munity-token'
 const PID_KEY = 'eco-munity-pid'
+const NOTICE_KEY = 'eco-munity-notice'
+/** a one-time message to show on the login screen (e.g. after being logged out from another device) */
+const takeNotice = () => {
+  try {
+    const m = sessionStorage.getItem(NOTICE_KEY)
+    if (m) sessionStorage.removeItem(NOTICE_KEY)
+    return m
+  } catch {
+    return null
+  }
+}
 
 /** random id for a guest so the server can keep their story; the only thing besides the login token kept in the browser */
 export const guestPid = (() => {
@@ -129,7 +140,7 @@ export const useAuth = create<AuthState>()((set) => ({
   status: readToken() ? 'checking' : 'out',
   user: null,
   token: readToken(),
-  error: null,
+  error: takeNotice(),
   busy: false,
   register: (username, password) => {
     const g = useGame.getState()
@@ -199,6 +210,18 @@ async function restore() {
   }
 }
 if (typeof window !== 'undefined' && useAuth.getState().status === 'checking') void restore()
+
+/** another device took over this account: log out here and say why */
+if (typeof window !== 'undefined')
+  window.addEventListener('eco-kicked', () => {
+    writeToken(null)
+    try {
+      sessionStorage.setItem(NOTICE_KEY, 'You were logged out because this account signed in on another device.')
+    } catch {
+      /* ignore */
+    }
+    window.location.reload()
+  })
 
 /* ---- saving the player's data (coins, items, projects, look, badges) to the account ---- */
 let timer: ReturnType<typeof setTimeout> | null = null

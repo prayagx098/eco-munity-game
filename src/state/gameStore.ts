@@ -17,7 +17,6 @@ import {
 import { BIN_SLOTS, HEAPS, LEARNING_BOARD, VEHICLES, MAKER_PADS, MAKER_YARD, initialVehicles, tidyVehicles, RESPAWN_DELAY, SCHOOL_NAME, BIN_CAP, TRUCK_INFO, jobTimes, type VehicleEntity, type VehicleKind, GARDEN_PLOTS, HOUSES, POND, SAPLING_SPOTS, STATIC_NPCS, TAPS, ZONES, collides, distToRect, offPath } from './world'
 import { isGrown, makeRoomForTrees } from './forest'
 import { useMeta } from './meta'
-import type { HomeDecor, HomeState } from './homes'
 import { act, ball, binSparkleState, companionPos, dress, duckFeeds, emitBurst, fetchStick, lastBellRing, npcPositions, player, remotePlayers, wobbleBinState } from './sceneRegistry'
 import { haptic } from '../utils/haptics'
 import { filterMessage, isKind } from './chatBot'
@@ -231,7 +230,6 @@ export type Action =
   | { kind: 'drop'; typeId: string; x: number; z: number }
   | { kind: 'plant'; id: string }
   | { kind: 'harvest'; id: string }
-  | { kind: 'home'; op: 'claim' | 'decor' | 'release'; id: string; decor?: HomeDecor }
   | { kind: 'water'; id: string }
   | { kind: 'lights'; id: string }
   | { kind: 'tap'; id: string }
@@ -246,6 +244,9 @@ export type Action =
   | { kind: 'kind-words' }
   | { kind: 'chatted' }
   | { kind: 'talked' }
+  | { kind: 'reward'; points?: number; energy?: number; happiness?: number; x?: number; z?: number; label?: string }
+  | { kind: 'kick'; x: number; z: number; h: number }
+  | { kind: 'whistle' }
 
 export interface Actor {
   id: string
@@ -277,8 +278,6 @@ export interface ActionResult {
   forest?: { planted?: number; harvested?: number }
   /** coins the player earns (added on their own device) */
   coins?: number
-  /** their home was claimed (id + decor) or given up (null) */
-  home?: { id: string; decor: HomeDecor } | null
 }
 
 /** Shared world state, broadcast by the host tab */
@@ -288,7 +287,7 @@ export interface WorldSnapshot {
   points: number
   trash: TrashItem[]
   saplings: SaplingSpot[]
-  homes?: Record<string, HomeState>
+  footballMatch?: FootballMatch
   plots: Record<string, number>
   lights: Record<string, boolean>
   leaks: Record<string, boolean>
@@ -427,8 +426,6 @@ export interface GameState {
   points: number
   trash: TrashItem[]
   saplings: SaplingSpot[]
-  /** Maple Street homes that have been claimed, by house id */
-  homes: Record<string, HomeState>
   plots: Record<string, number>
   lights: Record<string, boolean>
   leaks: Record<string, boolean>
@@ -570,6 +567,9 @@ export type RemoteEvent =
   | { kind: 'lightning' }
   | { kind: 'sfx'; name: SfxName; caption?: string }
 
+/** a visual/sound effect other players near you should also see (petting, bells, feeding…). Not part of the world state. */
+const sendFx = (m: { k: string; x: number; z: number; [key: string]: unknown }) => bridge.send({ t: 'fx', ...m })
+
 const sendEvent = (e: RemoteEvent, to: string = 'all') => {
   if (bridge.isHost) bridge.send({ t: 'ev', to, e })
 }
@@ -582,7 +582,6 @@ const initialWorld = () => ({
   points: 0,
   trash: [] as TrashItem[],
   saplings: makeSaplings(),
-  homes: {} as Record<string, HomeState>,
   plots: { 'plot-0': 72, 'plot-1': 20, 'plot-2': 66, 'plot-3': 35 } as Record<string, number>,
   lights: Object.fromEntries(HOUSES.map((h, i) => [h.id, i === 2 || i === 5])) as Record<string, boolean>,
   leaks: Object.fromEntries(TAPS.map((t, i) => [t.id, i === 1])) as Record<string, boolean>,
@@ -651,16 +650,15 @@ export function findInteraction(s: GameState, px: number, pz: number): Interacti
       if (!sp.planted) add(dist(sp.x, sp.z), 1.9, { kind: 'plant', targetId: sp.id, label: 'Plant a tree', emoji: '🌱', x: sp.x, z: sp.z })
       else if (isGrown(sp, s.elapsed)) add(dist(sp.x, sp.z), 2.1, { kind: 'harvest', targetId: sp.id, label: 'Harvest seeds (makes room to plant again)', emoji: '🧺', x: sp.x, z: sp.z })
     }
-    // Maple Street homes: claim a free one, or decorate your own (the mailbox is the "door" for this)
+    // Maple Street homes are PRIVATE to each player (thousands can play in one room): pick any house as yours,
+    // then decorate it. Press E at a house's mailbox.
     {
-      const me = s.profile.name
-      const myHouse = Object.entries(s.homes).find(([, h]) => h.owner === me)?.[0]
+      const myHouse = useMeta.getState().home.house
       for (const h of HOUSES) {
         const mx = h.x + 2.6
         const mz = h.z - 1.8
-        const owned = s.homes[h.id]
-        if (!owned && !myHouse) add(dist(mx, mz), 2.2, { kind: 'home', targetId: h.id, label: 'Claim this home', emoji: '🏡', x: mx, z: mz })
-        else if (owned?.owner === me) add(dist(mx, mz), 2.2, { kind: 'home', targetId: h.id, label: 'Decorate your home', emoji: '🎨', x: mx, z: mz })
+        if (myHouse === h.id) add(dist(mx, mz), 2.2, { kind: 'home', targetId: h.id, label: 'Decorate your home', emoji: '🎨', x: mx, z: mz })
+        else add(dist(mx, mz), 2.2, { kind: 'home', targetId: h.id, label: myHouse ? 'Move your home here' : 'Make this your home', emoji: '🏡', x: mx, z: mz })
       }
     }
     for (const p of GARDEN_PLOTS)
@@ -935,18 +933,17 @@ export const useGame = create<GameState>()((set, get) => {
     /* Pillar 2: High-Energy Mini-Games & Animal Companions */
     footballMatch: { red: 0, blue: 0, active: true, timeLeft: 120, celebration: null },
     scoreFootballGoal: (team) => {
+      if (!bridge.isHost) return // the host scores for everybody
       const match = get().footballMatch ?? { red: 0, blue: 0, active: true, timeLeft: 120, celebration: null }
       const updated = { ...match, [team]: (match[team] ?? 0) + 1, celebration: team }
       set({ footballMatch: updated })
       sfx('whistle')
       setTimeout(() => sfx('cheer'), 220)
       haptic([80, 50, 80, 50, 150])
-      get().pushToast({
-        kind: 'good',
-        emoji: '⚽',
-        title: `GOAL FOR ${team.toUpperCase()} TEAM!`,
-        text: `Match Score: Red ${updated.red} - Blue ${updated.blue}`,
-      })
+      const goalToast = { kind: 'good' as const, emoji: '⚽', title: `GOAL FOR ${team.toUpperCase()} TEAM!`, text: `Match Score: Red ${updated.red} - Blue ${updated.blue}` }
+      get().pushToast(goalToast)
+      sendEvent({ kind: 'toast', toast: goalToast })
+      sendEvent({ kind: 'sfx', name: 'whistle' })
       get().reward({ points: 15, happiness: 5, energy: 2, x: ball.x, z: ball.z, label: '+15 ⚽' })
       get().checkBadges()
       setTimeout(() => {
@@ -956,6 +953,7 @@ export const useGame = create<GameState>()((set, get) => {
       }, 3500)
     },
     resetFootballMatch: () => {
+      if (!bridge.isHost) return get().dispatch({ kind: 'whistle' })
       set({ footballMatch: { red: 0, blue: 0, active: true, timeLeft: 120, celebration: null } })
       sfx('whistle')
       get().pushToast({
@@ -966,6 +964,7 @@ export const useGame = create<GameState>()((set, get) => {
       })
     },
     tickFootballTimer: (dt) => {
+      if (!bridge.isHost) return // the host keeps the clock; everyone else gets it in the world snapshot
       const m = get().footballMatch
       if (!m || !m.active) return
       const nextTime = m.timeLeft - dt
@@ -992,6 +991,7 @@ export const useGame = create<GameState>()((set, get) => {
       lastBellRing.time = Date.now()
       lastBellRing.x = player.x
       lastBellRing.z = player.z
+      sendFx({ k: 'bell', x: player.x, z: player.z })
       get().addFloater({ x: player.x, z: player.z, text: '🔔 Ding! Ding!', color: '#38bdf8' })
     },
 
@@ -1015,6 +1015,7 @@ export const useGame = create<GameState>()((set, get) => {
       const heading = player.heading
       const seedX = player.x + Math.sin(heading) * 2.5
       const seedZ = player.z + Math.cos(heading) * 2.5
+      sendFx({ k: 'feed', x: seedX, z: seedZ })
       duckFeeds.push({ id: Date.now(), x: seedX, z: seedZ, time: Date.now() })
       if (duckFeeds.length > 8) duckFeeds.shift()
       sfx('splash')
@@ -1026,7 +1027,8 @@ export const useGame = create<GameState>()((set, get) => {
 
     companion: null,
     adoptCompanion: (kind, name) => {
-      set({ companion: { kind, name, petAt: Date.now() }, happiness: 100 })
+      set({ companion: { kind, name, petAt: Date.now() } })
+      get().reward({ happiness: 20 })
       sfx('fanfare')
       get().checkBadges()
       get().pushToast({
@@ -1039,10 +1041,11 @@ export const useGame = create<GameState>()((set, get) => {
     petCompanion: () => {
       const comp = get().companion
       if (!comp) return
-      set({
-        companion: { ...comp, petAt: Date.now() },
-        happiness: Math.min(100, get().happiness + 15),
-      })
+      set({ companion: { ...comp, petAt: Date.now() } })
+      get().reward({ happiness: 15 })
+      sendFx({ k: 'pet', x: companionPos.x, z: companionPos.z, n: comp.name })
+      emitBurst({ x: companionPos.x, z: companionPos.z, y: 0.9, color: '#f472b6', n: 8, spread: 0.8, size: 0.07 })
+      get().addFloater({ x: companionPos.x, z: companionPos.z, text: '💖', color: '#ec4899' })
       sfx('fanfare')
       get().pushToast({
         kind: 'good',
@@ -1471,9 +1474,13 @@ export const useGame = create<GameState>()((set, get) => {
         case 'harvest':
           return get().dispatch({ kind: 'harvest', id: n.targetId })
         case 'home': {
-          const mine = s.homes[n.targetId]?.owner === s.profile.name
-          if (mine) useMeta.getState().setPanel('home')
-          else get().dispatch({ kind: 'home', op: 'claim', id: n.targetId, decor: useMeta.getState().home.decor })
+          const meta = useMeta.getState()
+          if (meta.home.house === n.targetId) meta.setPanel('home')
+          else {
+            meta.setHome(n.targetId)
+            sfx('fanfare')
+            get().pushToast({ kind: 'good', emoji: '🏡', title: 'Welcome home!', text: 'Press E at your mailbox to decorate it. Only you see your decorations.' })
+          }
           return
         }
         case 'water':
@@ -1487,10 +1494,12 @@ export const useGame = create<GameState>()((set, get) => {
           return get().dispatch({ kind: 'look' })
         case 'kick': {
           // a strong kick in the direction you are facing
-          const sp = 11
-          ball.vx = Math.sin(player.heading) * sp
-          ball.vz = Math.cos(player.heading) * sp
-          ball.vy = 3.2
+          if (bridge.isHost) {
+            const sp = 11
+            ball.vx = Math.sin(player.heading) * sp
+            ball.vz = Math.cos(player.heading) * sp
+            ball.vy = 3.2
+          } else bridge.send({ t: 'act', to: bridge.hostId, a: { kind: 'kick', x: player.x, z: player.z, h: player.heading } satisfies Action })
           sfx('drop')
           return
         }
@@ -1574,7 +1583,6 @@ export const useGame = create<GameState>()((set, get) => {
         if (r.forest) meta.recordForest(r.forest)
         if (r.stat || r.forest?.harvested) meta.record({ ...(r.stat ?? {}), ...(r.forest?.harvested ? { harvested: r.forest.harvested } : {}) })
         if (r.coins) get().addCoins(r.coins, 'Seeds sold to the Forest Reserve', true)
-        if (r.home !== undefined) meta.setHome(r.home ? r.home.id : null, r.home?.decor && Object.keys(r.home.decor).length ? r.home.decor : undefined)
       }
       if (r.toast) get().pushToast(r.toast)
       if (r.sfx) {
@@ -1685,29 +1693,22 @@ export const useGame = create<GameState>()((set, get) => {
           team('🧺', 'harvested seeds from a grown tree!')
           return { sfx: 'coin', forest: { harvested: 1 }, coins: 6, toast: { kind: 'good', emoji: '🧺', title: 'Seeds collected!', text: 'The plot is empty again, so there is always room to plant a new tree.' } }
         }
-        case 'home': {
-          const h = HOUSES.find((x) => x.id === a.id)
-          if (!h) return null
-          const cur = s.homes[h.id]
-          if (a.op === 'release') {
-            if (cur?.owner !== actor.name) return null
-            const { [h.id]: _gone, ...rest } = s.homes
-            void _gone
-            set({ homes: rest })
-            return { home: null, toast: { kind: 'info', emoji: '🏠', title: 'You moved out', text: 'The home is free for someone else.' } }
-          }
-          if (a.op === 'claim') {
-            if (cur && cur.owner !== actor.name) return { toast: { kind: 'info', emoji: '🏠', title: `That home belongs to ${cur.owner}` } }
-            // one home per player
-            const homes: Record<string, HomeState> = Object.fromEntries(Object.entries(s.homes).filter(([, v]) => v.owner !== actor.name))
-            homes[h.id] = { owner: actor.name, ...(a.decor ?? {}) }
-            set({ homes })
-            team('🏡', 'moved into a Maple Street home!')
-            return { sfx: 'fanfare', home: { id: h.id, decor: a.decor ?? {} }, toast: { kind: 'good', emoji: '🏡', title: 'Welcome home!', text: 'Press E at your mailbox to decorate it with the coins you earn.' } }
-          }
-          if (cur?.owner !== actor.name) return null
-          set({ homes: { ...s.homes, [h.id]: { owner: actor.name, ...(a.decor ?? {}) } } })
-          return { sfx: 'chat' }
+        case 'reward': {
+          // from another player's pet / mini-game: small bounded amounts only
+          const cl = (v: number | undefined, m: number) => Math.max(0, Math.min(m, Number(v) || 0))
+          get().reward({ points: cl(a.points, 20), energy: cl(a.energy, 10), happiness: cl(a.happiness, 25), x: a.x, z: a.z, label: typeof a.label === 'string' ? a.label.slice(0, 24) : undefined })
+          return {}
+        }
+        case 'whistle':
+          get().resetFootballMatch()
+          return {}
+        case 'kick': {
+          // the football lives on the host: a kick from anywhere near it launches it
+          if (Math.hypot(ball.x - a.x, ball.z - a.z) > 3) return {}
+          ball.vx = Math.sin(a.h) * 11
+          ball.vz = Math.cos(a.h) * 11
+          ball.vy = 3.2
+          return {}
         }
         case 'water': {
           if ((s.plots[a.id] ?? 0) < 60) return null
@@ -1841,7 +1842,7 @@ export const useGame = create<GameState>()((set, get) => {
         points: s.points,
         trash: s.trash,
         saplings: s.saplings,
-        homes: s.homes,
+        footballMatch: s.footballMatch,
         plots: s.plots,
         lights: s.lights,
         leaks: s.leaks,
@@ -1872,7 +1873,6 @@ export const useGame = create<GameState>()((set, get) => {
       set({
         ...rest,
         vehicles: tidyVehicles(rest.vehicles ?? []),
-        homes: rest.homes ?? {},
         tasks,
         ...(stats ? { stats } : {}),
       })
@@ -2015,6 +2015,11 @@ export const useGame = create<GameState>()((set, get) => {
     /* ------------------------------ helpers ------------------------------ */
 
     reward: ({ points = 0, energy = 0, happiness = 0, x, z, label }) => {
+      // points / energy / happiness belong to the shared town: only the host changes them (otherwise the next snapshot undoes it)
+      if (!bridge.isHost) {
+        bridge.send({ t: 'act', to: bridge.hostId, a: { kind: 'reward', points, energy, happiness, x, z, label } satisfies Action })
+        return
+      }
       set((s) => ({ points: s.points + points, energy: clamp(s.energy + energy), happiness: clamp(s.happiness + happiness) }))
       if (label && x !== undefined && z !== undefined) get().addFloater({ x, z, text: label, color: '#16a34a' }, true)
     },

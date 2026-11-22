@@ -9,6 +9,8 @@ import { handleAuth, sanitizeStory, userByToken } from './auth.js'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DIST_DIR = path.join(__dirname, 'dist')
 const PORT = process.env.PORT || 8080
+/** most players in one room before newcomers go to a fresh copy of it */
+const ROOM_CAP = Math.max(2, Number(process.env.ROOM_CAP) || 40)
 
 store.connect()
 
@@ -25,6 +27,23 @@ class RoomManager {
   cleanRoomName(raw) {
     if (!raw || typeof raw !== 'string') return 'default'
     return raw.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 32) || 'default'
+  }
+
+  /**
+   * Every player is sent every other player's moves, so one room can only hold a few dozen people.
+   * Past ROOM_CAP players, newcomers are placed in the next copy of the room ("class", "class--2", …).
+   */
+  pickInstance(rawName) {
+    const base = this.cleanRoomName(rawName)
+    for (let n = 1; n < 500; n++) {
+      const name = n === 1 ? base : `${base}--${n}`
+      const room = this.getRoom(name)
+      if (room.clients.size + (room.reserved || 0) < ROOM_CAP) {
+        room.reserved = (room.reserved || 0) + 1
+        return room
+      }
+    }
+    return this.getRoom(base)
   }
 
   getRoom(rawName) {
@@ -323,7 +342,12 @@ setInterval(() => {
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`)
   const rawRoom = url.searchParams.get('room') || 'default'
-  const room = roomManager.getRoom(rawRoom)
+  const room = roomManager.pickInstance(rawRoom)
+  let reserved = true
+  const unreserve = () => {
+    if (reserved) room.reserved = Math.max(0, (room.reserved || 1) - 1)
+    reserved = false
+  }
 
   ws.room = room.name
   ws.clientId = `client-${Math.random().toString(36).slice(2, 9)}`
@@ -335,24 +359,47 @@ wss.on('connection', (ws, req) => {
    * The first message is {t:'auth', token}. A logged-in account may only be in a room once: a second connection
    * for the same account is refused (unless the first one has gone silent, i.e. it is really gone).
    */
-  const join = async (token) => {
+  /** remove a replaced connection from its room and tell the others it left */
+  const dropped = (r, other) => {
+    r.clients.delete(other)
+    const bye = JSON.stringify({ t: 'bye', from: other.clientId })
+    for (const c of r.clients) if (c.readyState === WebSocket.OPEN) c.send(bye)
+  }
+
+  const join = async (token, tab, takeover) => {
     const user = token ? await userByToken(token).catch(() => null) : null
     if (user) {
-      for (const other of room.clients) {
-        if (other.userId !== user._id) continue
-        if (Date.now() - (other.lastSeen || 0) > 15000) {
-          other.terminate() // stale connection from the same account
-          room.clients.delete(other)
+      // every connection of this account, in any room
+      const others = []
+      for (const r of roomManager.rooms.values()) for (const other of r.clients) if (other !== ws && other.userId === user._id) others.push([r, other])
+      for (const [r, other] of others) {
+        const sameTab = !!tab && other.tab === tab // a reconnect of the same browser tab: simply replace the old socket
+        const gone = Date.now() - (other.lastSeen || 0) > 15000 // silent for a while: really gone
+        if (sameTab || gone) {
+          other.terminate()
+          dropped(r, other)
+        } else if (takeover) {
+          // "log out of all other devices and play here": the older device is told and disconnected
+          try {
+            other.send(JSON.stringify({ t: 'kicked', from: 'server' }))
+          } catch {
+            // ignore
+          }
+          other.close(4002, 'signed-in-elsewhere')
+          dropped(r, other)
         } else {
-          console.log(`⛔ [WS] "${user.username}" is already in room "${room.name}" – refused a second connection`)
+          console.log(`⛔ [WS] "${user.username}" is already playing elsewhere – refused a second connection`)
           if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: 'duplicate', from: 'server' }))
           ws.close(4001, 'already-in-room')
+          unreserve()
           return false
         }
       }
       ws.userId = user._id
+      ws.tab = tab || null
     }
     room.clients.add(ws)
+    unreserve()
     console.log(`🔌 [WS] Client ${ws.clientId}${user ? ` (${user.username})` : ''} joined room "${room.name}" (${room.clients.size} online)`)
     // send the saved authoritative world state once it has been loaded from storage
     room.loading.then(() => {
@@ -397,20 +444,21 @@ wss.on('connection', (ws, req) => {
         // not JSON
       }
       if (first && first.t === 'auth') {
-        ready = join(first.token)
+        ready = join(first.token, typeof first.tab === 'string' ? first.tab.slice(0, 40) : '', !!first.takeover)
         return
       }
-      ready = join(null) // older clients send no auth message: treat as guests
+      ready = join(null, '', false) // older clients send no auth message: treat as guests
     }
     ready.then((ok) => ok && relay(message, isBinary))
   })
 
   // a client that never says anything is let in as a guest after a moment
   setTimeout(() => {
-    if (!ready && ws.readyState === WebSocket.OPEN) ready = join(null)
+    if (!ready && ws.readyState === WebSocket.OPEN) ready = join(null, '', false)
   }, 3000)
 
   ws.on('close', () => {
+    unreserve()
     if (!room.clients.delete(ws)) return // was refused, never joined
     console.log(`👋 [WS] Client ${ws.clientId} left room "${room.name}" (${room.clients.size} remaining)`)
 

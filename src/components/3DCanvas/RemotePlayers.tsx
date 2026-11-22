@@ -7,6 +7,7 @@ import { env, remotePlayers } from '../../state/sceneRegistry'
 import { SCHOOL_FIELD, groundY, type VehicleKind } from '../../state/world'
 import { Label } from './primitives'
 import { VehicleMesh } from './Vehicles'
+import { RemotePet } from './Animals'
 import { Minifig, SpeechBubble, type MinifigAnim } from './NPCs'
 import { TrashShape } from './TrashItems'
 import { emitPuff } from './Weather'
@@ -53,6 +54,8 @@ function RemotePlayer({ id, profile }: { id: string; profile: Profile }) {
     anim.current.speed += ((r.moving ? (r.running ? 1.6 : 1) : 0) - anim.current.speed) * Math.min(1, dt * 10)
     anim.current.armsUp = !!r.carry && !r.vehicle
     anim.current.ride = !!r.vehicle
+    // the gesture they are playing (watering, planting, kicking…)
+    anim.current.act = r.act ? { kind: r.act.kind, p: r.act.p } : null
     anim.current.jump = Math.min(1, jumpY.current / 0.7)
     if (r.carry !== carry) setCarry(r.carry)
     if (r.vehicle !== vehicle) setVehicle(r.vehicle)
@@ -104,7 +107,10 @@ export function RemotePlayers() {
   return (
     <group>
       {Object.entries(remotes).map(([id, profile]) => (
-        <RemotePlayer key={id} id={id} profile={profile} />
+        <group key={id}>
+          <RemotePlayer id={id} profile={profile} />
+          <RemotePet id={id} />
+        </group>
       ))}
     </group>
   )

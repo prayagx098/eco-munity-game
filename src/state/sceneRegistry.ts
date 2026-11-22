@@ -66,7 +66,10 @@ export const depot = { recycle: false, compost: false, trash: false }
 export const bodies = new Map<string, { x: number; z: number; r: number }>()
 
 /** Live companion position and waiting status (so interaction distance and bike logic know where pet is) */
-export const companionPos = { x: 0, z: 0, waiting: false }
+export const companionPos = { x: 0, z: 0, waiting: false, heading: 0, moving: false }
+
+/** the football as the host last reported it (other players glide the ball towards this) */
+export const ballNet = { x: 0, z: 0, y: 0.22, vx: 0, vz: 0, vy: 0, at: 0 }
 
 /** the little twirl + sparkle shown when you put something on in the shop */
 export const dress = { active: false, t: 0 }
@@ -83,6 +86,10 @@ export interface RemoteSnapshot {
   vehicle: VehicleKind | null
   /** height above the ground while jumping */
   jump: number
+  /** the gesture they are playing right now (watering, planting…) and how far through it they are */
+  act?: { kind: string; p: number } | null
+  /** their companion pet, so everybody sees it */
+  pet?: { kind: 'dog' | 'cat' | 'duck'; name: string; x: number; z: number; h: number; moving: boolean; waiting: boolean } | null
   seen: number
 }
 export const remotePlayers = new Map<string, RemoteSnapshot>()

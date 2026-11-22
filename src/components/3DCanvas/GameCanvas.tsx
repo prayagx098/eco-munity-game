@@ -1,3 +1,4 @@
+import * as sceneReg from '../../state/sceneRegistry'
 import { useMeta } from '../../state/meta'
 import { useEffect, useMemo, useRef } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
@@ -437,7 +438,7 @@ export function GameCanvas() {
         st.gl.shadowMap.type = THREE.PCFSoftShadowMap
         st.gl.toneMapping = THREE.ACESFilmicToneMapping
         st.gl.toneMappingExposure = 1.12
-        if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { ecoThree: st, ecoReg: { player, view, game: useGame, meta: useMeta } })
+        if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { ecoThree: st, ecoReg: { player, view, game: useGame, meta: useMeta, reg: sceneReg } })
       }}
     >
       <AutoQuality />

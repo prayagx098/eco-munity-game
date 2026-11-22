@@ -236,6 +236,11 @@ export async function handleAuth(req, res, pathname) {
       await store.deleteSession(hash)
       return json(200, { ok: true }), true
     }
+    // "log out of all other devices": every other login of this account is ended (this one stays)
+    if (pathname === '/api/me/logout-others' && req.method === 'POST') {
+      await store.deleteOtherSessions(user._id, hash)
+      return json(200, { ok: true }), true
+    }
     if (pathname === '/api/me' && req.method === 'GET') return json(200, { user: publicUser(user), data: user.data ?? {}, story: user.story ?? null }), true
     if (pathname === '/api/me/data' && req.method === 'PUT') {
       const b = await readBody(req)

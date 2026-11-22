@@ -240,7 +240,6 @@ export const useMeta = create<MetaState>()((set, get) => ({
     const s = get()
     const decor = { ...s.home.decor, ...patch }
     set({ home: { ...s.home, decor } })
-    if (s.home.house) useGame.getState().dispatch({ kind: 'home', op: 'decor', id: s.home.house, decor })
   },
 
   hydrate: (d) => {

@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useId, useRef, useState, type Rea
 import { useFrame } from '@react-three/fiber'
 import type { Group, Mesh } from 'three'
 import { getTownEcoStatus, useGame } from '../../state/gameStore'
-import { bodies, companionPos, duckFeeds, fetchStick, player } from '../../state/sceneRegistry'
+import { bodies, companionPos, duckFeeds, fetchStick, player, remotePlayers } from '../../state/sceneRegistry'
 import { POND, RIVER, groundY } from '../../state/world'
 import { Block, Label, Plastic } from './primitives'
 import { sfx } from '../../audio/audio'
@@ -51,6 +51,60 @@ interface WanderProps {
 }
 
 /** Wanders randomly inside a circular zone; shy ones run from you, friendly ones follow you */
+/** Another player's companion pet, following them on my screen (position streamed from their device) */
+export function RemotePet({ id }: { id: string }) {
+  const ref = useRef<Group>(null)
+  const pos = useRef<{ x: number; z: number; h: number } | null>(null)
+  const st = useRef<AnimalState>({ moving: false, t: 0, idle: 0, sit: false })
+  const [kind, setKind] = useState<'dog' | 'cat' | 'duck' | null>(null)
+  const [name, setName] = useState('')
+  const [waiting, setWaiting] = useState(false)
+
+  useFrame((_, rawDt) => {
+    const g = ref.current
+    const pet = remotePlayers.get(id)?.pet
+    if (!g) return
+    g.visible = !!pet
+    if (kind !== (pet?.kind ?? null)) setKind(pet?.kind ?? null)
+    if (!pet) return
+    if (name !== pet.name) setName(pet.name)
+    if (waiting !== pet.waiting) setWaiting(pet.waiting)
+    const dt = Math.min(rawDt, 0.05)
+    if (!pos.current) pos.current = { x: pet.x, z: pet.z, h: pet.h }
+    const p = pos.current
+    const k = 1 - Math.exp(-dt * 10)
+    const dx = pet.x - p.x
+    const dz = pet.z - p.z
+    p.x += dx * k
+    p.z += dz * k
+    let dh = pet.h - p.h
+    dh = Math.atan2(Math.sin(dh), Math.cos(dh))
+    p.h += dh * k
+    const moving = Math.hypot(dx, dz) > 0.03 || pet.moving
+    st.current.t += dt
+    st.current.moving = moving
+    st.current.sit = !moving
+    st.current.idle = moving ? 0 : st.current.idle + dt
+    g.position.set(p.x, groundY(p.x, p.z), p.z)
+    g.rotation.y = p.h
+  })
+
+  return (
+    <group ref={ref} visible={false}>
+      <AnimalCtx.Provider value={st}>
+        {kind === 'dog' && <Dog />}
+        {kind === 'cat' && <Cat />}
+        {kind === 'duck' && <Duck />}
+      </AnimalCtx.Provider>
+      {kind && (
+        <Label position={[0, 0.9, 0]}>
+          <div className="whitespace-nowrap rounded-full bg-pink-500/80 px-2 py-0.5 text-[10px] font-bold text-white shadow">{waiting ? '💤' : '💖'} {name}</div>
+        </Label>
+      )}
+    </group>
+  )
+}
+
 function Wanderer({ center, radius, speed, gait, flee, size = 0.28, children }: WanderProps) {
   const uid = useId()
   useEffect(() => () => void bodies.delete(uid), [uid])
@@ -690,6 +744,8 @@ function ActiveCompanion() {
 
     companionPos.x = p.x
     companionPos.z = p.z
+    companionPos.heading = p.heading
+    companionPos.moving = st.current.moving
 
     const y = groundY(p.x, p.z)
     ref.current.position.set(p.x, y, p.z)

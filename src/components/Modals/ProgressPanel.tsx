@@ -98,20 +98,18 @@ function Missions() {
 const KIND_LABEL: Record<HomeKind, string> = { wall: 'Walls', roof: 'Roof', door: 'Door', extra: 'Extras' }
 
 function Home() {
-  const myName = useGame((s) => s.profile.name)
   const coins = useGame((s) => s.wallet.coins)
-  const homes = useGame((s) => s.homes)
   const home = useMeta((m) => m.home)
   const buy = useMeta((m) => m.buyHomeItem)
   const apply = useMeta((m) => m.applyDecor)
-  const live = Object.entries(homes).find(([, h]) => h.owner === myName)
-  if (!home.house || !live) {
+  const setHome = useMeta((m) => m.setHome)
+  if (!home.house) {
     return (
       <div className="rounded-2xl bg-lime-50 p-4 text-center ring-1 ring-lime-200">
         <div className="text-4xl">🏡</div>
         <div className="mt-1 text-sm font-extrabold text-lime-900">You don't have a home yet</div>
         <p className="mt-1 text-xs font-medium text-lime-800/80">
-          Walk to the mailbox of a house on Maple Street with a <b>🏡 Free home</b> sign and press <b>E</b> to claim it. Then come back here to decorate it with the coins you earn.
+          Walk to the mailbox of any house on Maple Street and press <b>E</b> to make it yours. Every player gets their own home, so there's always one for you. Then come back here to decorate it with the coins you earn. Only you see your decorations.
         </p>
       </div>
     )
@@ -130,7 +128,7 @@ function Home() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between rounded-2xl bg-emerald-50 p-2.5 ring-1 ring-emerald-200">
-        <div className="text-xs font-bold text-emerald-900">🏡 Your home on Maple Street</div>
+        <div className="text-xs font-bold text-emerald-900">🏡 Your home on Maple Street ({home.house ? `house ${Number(home.house.split('-')[1]) + 1}` : ''})</div>
         <div className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-extrabold text-amber-800">🪙 {coins}</div>
       </div>
       {(['wall', 'roof', 'door', 'extra'] as HomeKind[]).map((kind) => (
@@ -154,13 +152,9 @@ function Home() {
           </div>
         </div>
       ))}
-      <button
-        onClick={() => {
-          if (home.house) useGame.getState().dispatch({ kind: 'home', op: 'release', id: home.house })
-        }}
-        className="w-full rounded-xl bg-slate-100 py-2 text-[11px] font-bold text-slate-500 active:scale-95"
-      >
-        Move out (someone else can have it)
+      <p className="text-center text-[10px] font-medium text-slate-400">Only you see your decorations. To live in a different house, press E at its mailbox.</p>
+      <button onClick={() => setHome(null)} className="w-full rounded-xl bg-slate-100 py-2 text-[11px] font-bold text-slate-500 active:scale-95">
+        Move out (keeps your decorations for next time)
       </button>
     </div>
   )

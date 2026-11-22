@@ -3,7 +3,8 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { Group } from 'three'
 import { useGame } from '../../state/gameStore'
-import { ball, emitBurst, player } from '../../state/sceneRegistry'
+import { ball, ballNet, emitBurst, player, remotePlayers } from '../../state/sceneRegistry'
+import { bridge } from '../../state/netBridge'
 import { FOOTBALL_SPOT, GOALS, SCHOOL_BUILDING, SCHOOL_E, SCHOOL_FIELD, SCHOOL_GATE, SCHOOL_INNER, SCHOOL_S, SCHOOL_W, SCHOOL_WALLS, collides, type Rect } from '../../state/world'
 import { Block, Label, Near, Sign3D, sharedMaterials } from './primitives'
 
@@ -259,13 +260,31 @@ export function Football() {
   const g = useRef<Group>(null)
   const spin = useRef<Group>(null)
   const tex = useMemo(ballTexture, [])
-  const st = useRef({ resetAt: 0, outside: 0 })
+  const st = useRef({ resetAt: 0, outside: 0, sent: 0 })
   const R = 0.24
 
   useFrame(({ clock }, rawDt) => {
     const dt = Math.min(rawDt, 0.05)
     const b = ball
     const now = clock.elapsedTime
+    // Only the host plays the ball (so everybody sees the same ball and the same goals); the others glide towards it
+    if (!bridge.isHost) {
+      if (ballNet.at > 0) {
+        const age = Math.min(0.3, (performance.now() - ballNet.at) / 1000)
+        const k = Math.min(1, dt * 12)
+        b.x += (ballNet.x + ballNet.vx * age - b.x) * k
+        b.z += (ballNet.z + ballNet.vz * age - b.z) * k
+        b.y += (ballNet.y - b.y) * k
+        b.vx = ballNet.vx
+        b.vz = ballNet.vz
+      }
+      if (g.current) g.current.position.set(b.x, b.y, b.z)
+      if (spin.current) {
+        spin.current.rotation.x += (b.vz * dt) / R
+        spin.current.rotation.z -= (b.vx * dt) / R
+      }
+      return
+    }
     if (st.current.resetAt && now > st.current.resetAt) {
       st.current.resetAt = 0
       b.x = FOOTBALL_SPOT[0]
@@ -284,6 +303,19 @@ export function Football() {
     } else if (d < 0.45) {
       b.x += (dx / d) * (0.45 - d)
       b.z += (dz / d) * (0.45 - d)
+    }
+    // other players can dribble it too
+    if (!st.current.resetAt) {
+      for (const r of remotePlayers.values()) {
+        const rx = b.x - r.x
+        const rz = b.z - r.z
+        const rd = Math.hypot(rx, rz) || 0.001
+        if (rd < 0.8 && r.moving && !r.vehicle) {
+          const push = r.running ? 8 : 5.5
+          b.vx = (rx / rd) * push
+          b.vz = (rz / rd) * push
+        }
+      }
     }
     // physics
     const f = Math.exp(-1.5 * dt)
@@ -330,6 +362,12 @@ export function Football() {
       useGame.getState().dispatch({ kind: 'goal' })
       useGame.getState().scoreFootballGoal(team)
       b.vx = b.vz = 0
+    }
+    // tell the others where the ball is (often while it moves, now and then while it rests)
+    const speed = Math.hypot(b.vx, b.vz) + Math.abs(b.vy)
+    if (now - st.current.sent > (speed > 0.05 ? 0.1 : 1)) {
+      st.current.sent = now
+      bridge.send({ t: 'ball', x: Math.round(b.x * 100) / 100, z: Math.round(b.z * 100) / 100, y: Math.round(b.y * 100) / 100, vx: Math.round(b.vx * 100) / 100, vz: Math.round(b.vz * 100) / 100, vy: Math.round(b.vy * 100) / 100 })
     }
     // draw
     if (g.current) g.current.position.set(b.x, b.y, b.z)

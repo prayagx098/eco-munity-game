@@ -7,6 +7,7 @@ import * as THREE from 'three'
 import type { Group, Mesh } from 'three'
 import { Block, Label, Marker, Near, Plastic, Sign3D, sharedMaterials, type V3 } from './primitives'
 import { homeColor } from '../../state/homes'
+import { useMeta } from '../../state/meta'
 import { useGame, getTownEcoStatus, isNight } from '../../state/gameStore'
 import { env } from '../../state/sceneRegistry'
 import {
@@ -164,7 +165,12 @@ function House({ id, x, z, i }: { id: string; x: number; z: number; i: number })
   const stats = useGame((s) => s.stats)
   const eco = getTownEcoStatus(stats)
   const hasSolar = eco.tier >= 3 || (eco.tier === 2 && i % 2 === 0)
-  const home = useGame((s) => s.homes[id])
+  // your home is private: only you see your decorations
+  const mine = useMeta((m) => m.home.house === id)
+  const homeDecor = useMeta((m) => m.home.decor)
+  const hasHome = useMeta((m) => !!m.home.house)
+  const myName = useGame((s) => s.profile.name)
+  const home = mine ? { ...homeDecor, owner: myName } : null
   const [color0, roof0] = HOUSE_COLORS[i % HOUSE_COLORS.length]
   // a claimed home wears its owner's colours
   const color = home ? homeColor(home.wall, color0) : color0
@@ -320,11 +326,13 @@ function House({ id, x, z, i }: { id: string; x: number; z: number; i: number })
           <Sign3D text={`🏡 ${home.owner}`} position={[0.06, 1.3, 0]} rotation={[0, Math.PI / 2, 0]} width={1.5} height={0.38} bg="#166534" border="#bbf7d0" />
         </group>
       ) : (
-        <Near x={x + 2.6} z={z - 1.8} r={9}>
-          <Label position={[2.6, 1.5, -1.8]}>
-            <Marker emoji="🏡" text="Free home" color="bg-lime-200" />
-          </Label>
-        </Near>
+        !hasHome && (
+          <Near x={x + 2.6} z={z - 1.8} r={7}>
+            <Label position={[2.6, 1.5, -1.8]}>
+              <Marker emoji="🏡" text="Make it yours" color="bg-lime-200" />
+            </Label>
+          </Near>
+        )
       )}
 
       {wasted && (
