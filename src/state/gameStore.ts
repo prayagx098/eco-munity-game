@@ -120,7 +120,7 @@ export interface Weather {
   storm: boolean
 }
 
-export type InteractionKind = 'pickup' | 'bin' | 'plant' | 'water' | 'lights' | 'tap' | 'feed' | 'look' | 'turn' | 'ride' | 'dog' | 'kick' | 'pet' | 'return-pet' | 'quest' | 'talk' | 'quiz-bowl' | 'adopt' | 'pet-companion' | 'dismiss-companion' | 'whistle' | 'harvest' | 'home' | 'fetch-stick' | 'feed-ducks'
+export type InteractionKind = 'pickup' | 'bin' | 'plant' | 'water' | 'lights' | 'tap' | 'feed' | 'look' | 'turn' | 'ride' | 'dog' | 'kick' | 'pet' | 'return-pet' | 'quest' | 'talk' | 'quiz-bowl' | 'adopt' | 'pet-companion' | 'dismiss-companion' | 'whistle' | 'harvest' | 'fetch-stick' | 'feed-ducks'
 
 export interface FootballMatch {
   red: number
@@ -649,17 +649,6 @@ export function findInteraction(s: GameState, px: number, pz: number): Interacti
     for (const sp of s.saplings) {
       if (!sp.planted) add(dist(sp.x, sp.z), 1.9, { kind: 'plant', targetId: sp.id, label: 'Plant a tree', emoji: '🌱', x: sp.x, z: sp.z })
       else if (isGrown(sp, s.elapsed)) add(dist(sp.x, sp.z), 2.1, { kind: 'harvest', targetId: sp.id, label: 'Harvest seeds (makes room to plant again)', emoji: '🧺', x: sp.x, z: sp.z })
-    }
-    // Maple Street homes are PRIVATE to each player (thousands can play in one room): pick any house as yours,
-    // then decorate it. Press E at a house's mailbox.
-    {
-      const myHouse = useMeta.getState().home.house
-      for (const h of HOUSES) {
-        const mx = h.x + 2.6
-        const mz = h.z - 1.8
-        if (myHouse === h.id) add(dist(mx, mz), 2.2, { kind: 'home', targetId: h.id, label: 'Decorate your home', emoji: '🎨', x: mx, z: mz })
-        else add(dist(mx, mz), 2.2, { kind: 'home', targetId: h.id, label: myHouse ? 'Move your home here' : 'Make this your home', emoji: '🏡', x: mx, z: mz })
-      }
     }
     for (const p of GARDEN_PLOTS)
       if (s.plots[p.id] >= 60) add(distToRect(px, pz, p), 1.2, { kind: 'water', targetId: p.id, label: `Water the ${p.crop}s`, emoji: '💧', x: (p.x0 + p.x1) / 2, z: (p.z0 + p.z1) / 2 })
@@ -1408,7 +1397,6 @@ export const useGame = create<GameState>()((set, get) => {
         tap: [1.1, 0.55],
         plant: [1.1, 0.5],
         harvest: [1.1, 0.5],
-        home: [0.5, 0.3],
         lights: [0.8, 0.4],
         look: [1.3, 0.5],
         dog: [1.0, 0.45],
@@ -1473,16 +1461,6 @@ export const useGame = create<GameState>()((set, get) => {
           return get().dispatch({ kind: 'plant', id: n.targetId })
         case 'harvest':
           return get().dispatch({ kind: 'harvest', id: n.targetId })
-        case 'home': {
-          const meta = useMeta.getState()
-          if (meta.home.house === n.targetId) meta.setPanel('home')
-          else {
-            meta.setHome(n.targetId)
-            sfx('fanfare')
-            get().pushToast({ kind: 'good', emoji: '🏡', title: 'Welcome home!', text: 'Press E at your mailbox to decorate it. Only you see your decorations.' })
-          }
-          return
-        }
         case 'water':
           return get().dispatch({ kind: 'water', id: n.targetId })
         case 'lights':

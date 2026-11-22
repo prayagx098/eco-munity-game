@@ -241,7 +241,7 @@ useGame.subscribe((s, p) => {
 })
 useMeta.subscribe((s, p) => {
   if (applying || useAuth.getState().status !== 'in') return
-  if (s.missions === p.missions && s.streak === p.streak && s.week === p.week && s.forest === p.forest && s.home === p.home) return
+  if (s.missions === p.missions && s.streak === p.streak && s.week === p.week && s.forest === p.forest) return
   if (timer) clearTimeout(timer)
   timer = setTimeout(() => flushData(), 1500)
 })

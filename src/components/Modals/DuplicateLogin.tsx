@@ -11,7 +11,7 @@ export function DuplicateLogin() {
   const [failed, setFailed] = useState(false)
   if (!blocked) return null
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm">
+    <div className="pointer-events-auto fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm">
       <div className="glass w-full max-w-sm rounded-2xl p-5 text-center shadow-2xl">
         <div className="text-4xl">📱💻</div>
         <h2 className="mt-2 text-lg font-bold">This account is playing on another device</h2>

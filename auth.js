@@ -110,7 +110,7 @@ const ID = /^[a-z0-9-]{1,24}$/
 const int = (v, min, max) => (Number.isFinite(v) ? Math.max(min, Math.min(max, Math.floor(v))) : min)
 const idList = (a, n) => (Array.isArray(a) ? a.filter((x) => typeof x === 'string' && ID.test(x)).slice(0, n) : [])
 
-/** a player's missions / streak / tree record / home – only the shapes and ranges the game uses */
+/** a player's missions / streak / tree record – only the shapes and ranges the game uses */
 export function sanitizeMeta(m) {
   if (!m || typeof m !== 'object') return null
   const out = {
@@ -129,16 +129,6 @@ export function sanitizeMeta(m) {
     },
     week: { key: DAY.test(m.week?.key) ? m.week.key : '', done: int(m.week?.done, 0, 100), claimed: !!m.week?.claimed },
     forest: { planted: int(m.forest?.planted, 0, 1_000_000), harvested: int(m.forest?.harvested, 0, 1_000_000) },
-    home: {
-      house: typeof m.home?.house === 'string' && /^house-\d{1,2}$/.test(m.home.house) ? m.home.house : null,
-      decor: {
-        wall: typeof m.home?.decor?.wall === 'string' && ID.test(m.home.decor.wall) ? m.home.decor.wall : undefined,
-        roof: typeof m.home?.decor?.roof === 'string' && ID.test(m.home.decor.roof) ? m.home.decor.roof : undefined,
-        door: typeof m.home?.decor?.door === 'string' && ID.test(m.home.decor.door) ? m.home.decor.door : undefined,
-        extras: idList(m.home?.decor?.extras, 8),
-      },
-      owned: idList(m.home?.owned, 60),
-    },
   }
   return out
 }

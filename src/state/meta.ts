@@ -1,11 +1,9 @@
 import { create } from 'zustand'
 import { useGame, type Stats } from './gameStore'
-import { saveWallet } from './shop'
 import { sfx } from '../audio/audio'
-import { HOME_ITEM_BY_ID, HOME_DEFAULTS, type HomeDecor } from './homes'
 
 /**
- * A player's long-term progress: today's missions + streak, the weekly chest, their tree record and their home.
+ * A player's long-term progress: today's missions + streak, the weekly chest, their tree record and their record.
  * Saved with the account (and in this browser for guests).
  */
 
@@ -94,7 +92,6 @@ export interface MetaData {
   streak: { count: number; best: number; lastDay: string; paid: number }
   week: { key: string; done: number; claimed: boolean }
   forest: { planted: number; harvested: number }
-  home: { house: string | null; decor: HomeDecor; owned: string[] }
 }
 
 const blank = (): MetaData => ({
@@ -103,7 +100,6 @@ const blank = (): MetaData => ({
   streak: { count: 0, best: 0, lastDay: '', paid: 0 },
   week: { key: '', done: 0, claimed: false },
   forest: { planted: 0, harvested: 0 },
-  home: { house: null, decor: { ...HOME_DEFAULTS, extras: [] }, owned: ['wall-cream', 'roof-brick', 'door-blue'] },
 })
 
 const LS = 'eco-munity-meta'
@@ -123,7 +119,7 @@ const persist = (m: MetaData) => {
   }
 }
 
-export type PanelTab = 'missions' | 'home' | 'trees'
+export type PanelTab = 'missions' | 'trees'
 interface MetaState extends MetaData {
   panel: PanelTab | null
   setPanel: (p: PanelTab | null) => void
@@ -134,16 +130,12 @@ interface MetaState extends MetaData {
   claim: (id: string) => void
   claimWeek: () => void
   recordForest: (f: { planted?: number; harvested?: number }) => void
-  /** home */
-  setHome: (house: string | null, decor?: HomeDecor) => void
-  buyHomeItem: (id: string) => 'ok' | 'poor' | 'owned'
-  applyDecor: (patch: HomeDecor) => void
   /** account sync */
   hydrate: (d: Partial<MetaData> | null | undefined) => void
   exportData: () => MetaData
 }
 
-const pick = (s: MetaState): MetaData => ({ day: s.day, missions: s.missions, streak: s.streak, week: s.week, forest: s.forest, home: s.home })
+const pick = (s: MetaState): MetaData => ({ day: s.day, missions: s.missions, streak: s.streak, week: s.week, forest: s.forest })
 
 export const useMeta = create<MetaState>()((set, get) => ({
   ...load(),
@@ -220,31 +212,9 @@ export const useMeta = create<MetaState>()((set, get) => ({
     set({ forest: { planted: s.forest.planted + (f.planted ?? 0), harvested: s.forest.harvested + (f.harvested ?? 0) } })
   },
 
-  setHome: (house, decor) => set((s) => ({ home: { ...s.home, house, decor: decor ?? s.home.decor } })),
-
-  buyHomeItem: (id) => {
-    const item = HOME_ITEM_BY_ID[id]
-    const s = get()
-    if (!item || s.home.owned.includes(id)) return 'owned'
-    const g = useGame.getState()
-    if (g.wallet.coins < item.price) return 'poor'
-    const wallet = { ...g.wallet, coins: g.wallet.coins - item.price }
-    saveWallet(wallet)
-    useGame.setState({ wallet })
-    sfx('fanfare')
-    set({ home: { ...s.home, owned: [...s.home.owned, id] } })
-    return 'ok'
-  },
-
-  applyDecor: (patch) => {
-    const s = get()
-    const decor = { ...s.home.decor, ...patch }
-    set({ home: { ...s.home, decor } })
-  },
-
   hydrate: (d) => {
     const b = blank()
-    const next: MetaData = d ? { ...b, ...d, streak: { ...b.streak, ...d.streak }, week: { ...b.week, ...d.week }, forest: { ...b.forest, ...d.forest }, home: { ...b.home, ...d.home } } : b
+    const next: MetaData = d ? { ...b, ...d, streak: { ...b.streak, ...d.streak }, week: { ...b.week, ...d.week }, forest: { ...b.forest, ...d.forest } } : b
     set(next)
     get().ensureToday()
   },

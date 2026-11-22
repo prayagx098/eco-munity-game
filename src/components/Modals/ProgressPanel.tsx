@@ -2,12 +2,10 @@ import { useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useGame } from '../../state/gameStore'
 import { useMeta, MISSION_POOL, STREAK_BONUS, WEEK_COINS, WEEK_GOAL, todayKey, yesterdayKey, type PanelTab } from '../../state/meta'
-import { HOME_ITEMS, type HomeKind } from '../../state/homes'
 import { GROW_SECS, TREE_RANKS, growth, stageOf } from '../../state/forest'
 
 const TABS: { id: PanelTab; label: string }[] = [
   { id: 'missions', label: '🎯 Missions' },
-  { id: 'home', label: '🏡 My Home' },
   { id: 'trees', label: '🌳 My Trees' },
 ]
 
@@ -91,71 +89,6 @@ function Missions() {
         )}
       </div>
       <p className="text-center text-[10px] font-medium text-slate-400">New missions arrive every day. Unclaimed ones are replaced at midnight.</p>
-    </div>
-  )
-}
-
-const KIND_LABEL: Record<HomeKind, string> = { wall: 'Walls', roof: 'Roof', door: 'Door', extra: 'Extras' }
-
-function Home() {
-  const coins = useGame((s) => s.wallet.coins)
-  const home = useMeta((m) => m.home)
-  const buy = useMeta((m) => m.buyHomeItem)
-  const apply = useMeta((m) => m.applyDecor)
-  const setHome = useMeta((m) => m.setHome)
-  if (!home.house) {
-    return (
-      <div className="rounded-2xl bg-lime-50 p-4 text-center ring-1 ring-lime-200">
-        <div className="text-4xl">🏡</div>
-        <div className="mt-1 text-sm font-extrabold text-lime-900">You don't have a home yet</div>
-        <p className="mt-1 text-xs font-medium text-lime-800/80">
-          Walk to the mailbox of any house on Maple Street and press <b>E</b> to make it yours. Every player gets their own home, so there's always one for you. Then come back here to decorate it with the coins you earn. Only you see your decorations.
-        </p>
-      </div>
-    )
-  }
-  const decor = home.decor
-  const equipped = (it: (typeof HOME_ITEMS)[number]) => (it.kind === 'extra' ? (decor.extras ?? []).includes(it.id) : decor[it.kind] === it.id)
-  const choose = (it: (typeof HOME_ITEMS)[number]) => {
-    if (!home.owned.includes(it.id) && it.price > 0) {
-      if (buy(it.id) !== 'ok') return
-    } else if (it.price === 0 && !home.owned.includes(it.id)) buy(it.id)
-    if (it.kind === 'extra') {
-      const cur = decor.extras ?? []
-      apply({ extras: cur.includes(it.id) ? cur.filter((x) => x !== it.id) : [...cur, it.id] })
-    } else apply({ [it.kind]: it.id })
-  }
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between rounded-2xl bg-emerald-50 p-2.5 ring-1 ring-emerald-200">
-        <div className="text-xs font-bold text-emerald-900">🏡 Your home on Maple Street ({home.house ? `house ${Number(home.house.split('-')[1]) + 1}` : ''})</div>
-        <div className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-extrabold text-amber-800">🪙 {coins}</div>
-      </div>
-      {(['wall', 'roof', 'door', 'extra'] as HomeKind[]).map((kind) => (
-        <div key={kind}>
-          <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">{KIND_LABEL[kind]}</div>
-          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-            {HOME_ITEMS.filter((i) => i.kind === kind).map((it) => {
-              const owned = home.owned.includes(it.id) || it.price === 0
-              const on = equipped(it)
-              const poor = !owned && coins < it.price
-              return (
-                <button key={it.id} onClick={() => choose(it)} className={`flex items-center gap-1.5 rounded-xl p-1.5 text-left ring-1 transition active:scale-95 ${on ? 'bg-emerald-100 ring-2 ring-emerald-500' : 'bg-white ring-slate-200 hover:bg-slate-50'} ${poor ? 'opacity-55' : ''}`}>
-                  {it.color ? <span className="h-6 w-6 shrink-0 rounded-md ring-1 ring-black/10" style={{ background: it.color }} /> : <span className="text-xl">{it.emoji}</span>}
-                  <span className="min-w-0 flex-1 leading-tight">
-                    <span className="block truncate text-[11px] font-bold text-slate-800">{it.name}</span>
-                    <span className="block text-[10px] font-semibold text-slate-500">{on ? '✓ On' : owned ? 'Owned' : `🪙 ${it.price}`}</span>
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      ))}
-      <p className="text-center text-[10px] font-medium text-slate-400">Only you see your decorations. To live in a different house, press E at its mailbox.</p>
-      <button onClick={() => setHome(null)} className="w-full rounded-xl bg-slate-100 py-2 text-[11px] font-bold text-slate-500 active:scale-95">
-        Move out (keeps your decorations for next time)
-      </button>
     </div>
   )
 }
@@ -245,7 +178,6 @@ export function ProgressPanel() {
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto pr-1">
               {panel === 'missions' && <Missions />}
-              {panel === 'home' && <Home />}
               {panel === 'trees' && <Trees />}
             </div>
           </motion.div>
