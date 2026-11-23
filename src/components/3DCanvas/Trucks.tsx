@@ -3,7 +3,8 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { Group, Mesh } from 'three'
 import { useGame } from '../../state/gameStore'
-import { binLift, bodies, depot, emitBurst, player } from '../../state/sceneRegistry'
+import { binLift, bodies, carNet, carState, depot, emitBurst, player, remotePlayers } from '../../state/sceneRegistry'
+import { bridge } from '../../state/netBridge'
 import { BIN_SLOTS, LOAD_TIME, TRUCK_HOME, TRUCK_INFO, TRUCK_NODES, TRUCK_PARK, TRUCK_SPEED, UNLOAD_TIME, findTruckPark, jobTimes, type XZ } from '../../state/world'
 import { BIN_DEFS } from '../../state/gameData'
 import { Block, sharedMaterials } from './primitives'
@@ -158,6 +159,7 @@ function Truck({ kind }: { kind: Kind }) {
     const r = run.current
     const st = useGame.getState()
     const job = st.jobs.find((j) => j.kind === kind && j.startedAt !== null)
+    if (!job && bridge.isHost) carState.delete(`truck:${kind}`)
     let phase: Pose['phase'] = 'idle'
     let tx = home[0]
     let tz = home[1]
@@ -177,26 +179,41 @@ function Truck({ kind }: { kind: Kind }) {
         jt = jobTimes(kind, job.station)
         routes.current.set(job.station, jt)
       }
-      // wait for people standing in the way while driving, but NEVER get stuck on NPCs
-      const cur = poseAt(jt.route, r.t, kind)
-      let blocked = false
-      let creep = false
-      if (cur.phase === 'out' || cur.phase === 'in') {
-        const fx = Math.sin(cur.heading)
-        const fz = Math.cos(cur.heading)
-        const dx = player.x - cur.x
-        const dz = player.z - cur.z
-        const along = dx * fx + dz * fz
-        // Only react to the player if directly in front of the truck on the road
-        if (along > 0 && along < 3.2 && Math.abs(dx * fz - dz * fx) < 1.3) {
-          r.blockedTimer += dt
-          if (r.blockedTimer > 1.6) creep = true
-          else blocked = true
-        } else {
-          r.blockedTimer = 0
+      // The host drives the truck for everybody (so all players see it in the same place); it waits for ANY player in the way
+      const netT = !bridge.isHost ? carNet.get(`truck:${kind}`) : undefined
+      if (netT && netT.j === job.id) {
+        const age = Math.min(0.4, (performance.now() - netT.at) / 1000)
+        const target = netT.p + netT.v * age
+        const diff = target - r.t
+        if (Math.abs(diff) > 4) r.t = target
+        else r.t += diff * Math.min(1, dt * 8)
+      } else {
+        const cur = poseAt(jt.route, r.t, kind)
+        let blocked = false
+        let creep = false
+        if (cur.phase === 'out' || cur.phase === 'in') {
+          const fx = Math.sin(cur.heading)
+          const fz = Math.cos(cur.heading)
+          // only react to someone directly in front of the truck on the road
+          const inFront = (px: number, pz: number) => {
+            const dx = px - cur.x
+            const dz = pz - cur.z
+            const along = dx * fx + dz * fz
+            return along > 0 && along < 3.2 && Math.abs(dx * fz - dz * fx) < 1.3
+          }
+          let someone = inFront(player.x, player.z)
+          if (!someone) for (const rp of remotePlayers.values()) if (inFront(rp.x, rp.z)) someone = true
+          if (someone) {
+            r.blockedTimer += dt
+            if (r.blockedTimer > 1.6) creep = true
+            else blocked = true
+          } else {
+            r.blockedTimer = 0
+          }
         }
+        if (!blocked) r.t += creep ? dt * 0.45 : dt
+        if (bridge.isHost) carState.set(`truck:${kind}`, { p: r.t, v: blocked ? 0 : creep ? 0.45 : 1, j: job.id })
       }
-      if (!blocked) r.t += creep ? dt * 0.45 : dt
       const pose = poseAt(jt.route, r.t, kind)
       phase = pose.phase
       tx = pose.x

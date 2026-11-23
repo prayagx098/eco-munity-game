@@ -416,7 +416,7 @@ function handle(m: Record<string, unknown>) {
       // the host's traffic: every other player's cars follow it
       if (from === bridge.hostId && !bridge.isHost && Array.isArray(m.c)) {
         const at = performance.now()
-        for (const [id, p, v] of m.c as [string, number, number][]) carNet.set(id, { p, v, at })
+        for (const [id, p, v, j] of m.c as [string, number, number, string | undefined][]) carNet.set(id, { p, v, at, j })
       }
       return
     case 'ball':
@@ -489,7 +489,7 @@ export function startNet() {
   // the host reports where every car is, 8 times a second
   setInterval(() => {
     if (!bridge.isHost || !playing() || (peers.size === 0 && !wsConnected) || carState.size === 0) return
-    post({ t: 'cars', c: [...carState].map(([id, s]) => [id, Math.round(s.p * 100) / 100, Math.round(s.v * 100) / 100]) })
+    post({ t: 'cars', c: [...carState].map(([id, s]) => [id, Math.round(s.p * 100) / 100, Math.round(s.v * 100) / 100, s.j]) })
   }, 125)
 
   // my position, 10× a second
