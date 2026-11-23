@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { useGame } from '../../state/gameStore'
-import { GOOD_BY_ID } from '../../state/goods'
+import { GIFTABLE, GOOD_BY_ID, READABLE, SHOW_OFF } from '../../state/goods'
 import { ACT_LABEL, COND_LABEL, PROJECT_BY_ID } from '../../state/projects'
 import { ITEM_BY_ID } from '../../state/shop'
 import { Icon } from '../UI/Icons'
@@ -66,12 +66,27 @@ function Shelf() {
   )
 }
 
+function UseBtn({ children, onClick, on, disabled, title }: { children: React.ReactNode; onClick: () => void; on?: boolean; disabled?: boolean; title?: string }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition active:scale-95 ${disabled ? 'bg-slate-100 text-slate-300' : on ? 'bg-emerald-500 text-white' : 'bg-slate-900/90 text-white hover:bg-slate-700'}`}
+    >
+      {children}
+    </button>
+  )
+}
+
 export function InventoryModal() {
   const open = useGame((s) => s.invOpen)
   const setInv = useGame((s) => s.setInv)
   const w = useGame((s) => s.wallet)
   const [tab, setTab] = useState<Tab>('bag')
   const items = Object.entries(w.inv).filter(([, n]) => n > 0)
+  const mate = useGame((s) => s.nearbyMate)
+  const compassOn = useGame((s) => s.compassOn)
   const packs = w.owned.filter((id) => ITEM_BY_ID[id]?.cap)
   return (
     <AnimatePresence>
@@ -106,14 +121,30 @@ export function InventoryModal() {
                     {items.map(([id, n]) => {
                       const g = GOOD_BY_ID[id]
                       return (
-                        <div key={id} className="flex items-center gap-2.5 rounded-2xl border border-slate-200 bg-white p-3">
-                          <div className="text-2xl">{g?.icon}</div>
-                          <div className="min-w-0 flex-1 leading-tight">
-                            <div className="truncate text-sm font-semibold text-slate-900">{g?.name}</div>
-                            <div className="text-[11px] text-slate-500">
-                              × {n} · {(g?.size ?? 1) * n} slot{(g?.size ?? 1) * n > 1 ? 's' : ''}
+                        <div key={id} className="rounded-2xl border border-slate-200 bg-white p-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="text-2xl">{g?.icon}</div>
+                            <div className="min-w-0 flex-1 leading-tight">
+                              <div className="truncate text-sm font-semibold text-slate-900">{g?.name}</div>
+                              <div className="text-[11px] text-slate-500">
+                                × {n} · {(g?.size ?? 1) * n} slot{(g?.size ?? 1) * n > 1 ? 's' : ''}
+                                {w.show === id && ' · showing'}
+                              </div>
                             </div>
                           </div>
+                          {g?.counter === 3 && (
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {READABLE.has(id) && <UseBtn onClick={() => useGame.getState().readBook(id)}>📖 Read</UseBtn>}
+                              {id === 'seeds' && <UseBtn onClick={() => { useGame.getState().plantSeeds(); useGame.getState().setInv(false) }}>🌱 Plant</UseBtn>}
+                              {id === 'compass' && <UseBtn on={compassOn} onClick={() => useGame.getState().toggleCompass()}>{compassOn ? '🧭 Turn off' : '🧭 Use'}</UseBtn>}
+                              {SHOW_OFF.has(id) && <UseBtn on={w.show === id} onClick={() => useGame.getState().toggleShow(id)}>{w.show === id ? '✋ Put away' : '✨ Show off'}</UseBtn>}
+                              {GIFTABLE(id) && (
+                                <UseBtn disabled={!mate} title={mate ? 'Give one to the player next to you' : 'Stand next to another player to give a gift'} onClick={() => useGame.getState().giftGood(id)}>
+                                  🎁 Gift
+                                </UseBtn>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )
                     })}

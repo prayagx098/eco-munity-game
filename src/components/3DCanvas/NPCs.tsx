@@ -106,11 +106,94 @@ interface MinifigProps {
   hat?: string
   glasses?: string
   back?: string
+  /** a show-off item from the store (trophy, robot…) floating beside the character */
+  show?: string
   bandana?: 'red' | 'blue' | null
 }
 
+/** A prize from the store that floats or perches beside the character, so everybody can see it */
+function ShowOff({ kind }: { kind: string }) {
+  const g = useRef<Group>(null)
+  const spin = useRef<Group>(null)
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime
+    if (g.current) g.current.position.y = (kind === 'robot' || kind === 'telescope' ? 0 : Math.sin(t * 2) * 0.04)
+    if (spin.current) spin.current.rotation.y = t * (kind === 'stickers' ? 1.4 : kind === 'puzzle' ? 1.1 : 0.8)
+  })
+  const gold = { color: '#facc15', metalness: 0.7, roughness: 0.25 }
+  return (
+    <group ref={g}>
+      {kind === 'trophy' && (
+        <group position={[0.58, 1.1, 0.18]} scale={0.9}>
+          <mesh position={[0, 0, 0]}><cylinderGeometry args={[0.1, 0.12, 0.05, 12]} /><meshStandardMaterial {...gold} /></mesh>
+          <mesh position={[0, 0.1, 0]}><cylinderGeometry args={[0.03, 0.03, 0.15, 8]} /><meshStandardMaterial {...gold} /></mesh>
+          <mesh position={[0, 0.27, 0]}><cylinderGeometry args={[0.15, 0.07, 0.2, 14]} /><meshStandardMaterial {...gold} /></mesh>
+          {[-1, 1].map((sd) => (
+            <mesh key={sd} position={[sd * 0.17, 0.28, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.06, 0.015, 6, 12]} /><meshStandardMaterial {...gold} /></mesh>
+          ))}
+        </group>
+      )}
+      {kind === 'robot' && (
+        <group position={[-0.5, 1.5, 0]} rotation={[0, 0.4, 0]}>
+          <mesh position={[0, 0, 0]}><boxGeometry args={[0.2, 0.2, 0.15]} /><meshStandardMaterial color="#94a3b8" metalness={0.5} roughness={0.4} /></mesh>
+          <mesh position={[0, 0.19, 0]}><boxGeometry args={[0.18, 0.15, 0.15]} /><meshStandardMaterial color="#cbd5e1" metalness={0.5} roughness={0.4} /></mesh>
+          {[-0.04, 0.04].map((x) => (
+            <mesh key={x} position={[x, 0.2, 0.08]}><sphereGeometry args={[0.025, 8, 6]} /><meshStandardMaterial color="#22d3ee" emissive="#22d3ee" emissiveIntensity={1.6} /></mesh>
+          ))}
+          <mesh position={[0, 0.3, 0]}><cylinderGeometry args={[0.008, 0.008, 0.08, 5]} /><meshStandardMaterial color="#475569" /></mesh>
+          <mesh position={[0, 0.35, 0]}><sphereGeometry args={[0.025, 8, 6]} /><meshStandardMaterial color="#ef4444" emissive="#ef4444" emissiveIntensity={1.2} /></mesh>
+        </group>
+      )}
+      {kind === 'globe' && (
+        <group position={[0.62, 1.85, 0]}>
+          <group ref={spin}>
+            <mesh><sphereGeometry args={[0.17, 16, 12]} /><meshStandardMaterial color="#3b82f6" roughness={0.5} /></mesh>
+            <mesh position={[0.06, 0.06, 0.1]}><sphereGeometry args={[0.09, 8, 6]} /><meshStandardMaterial color="#22c55e" roughness={0.8} /></mesh>
+            <mesh position={[-0.1, -0.05, 0.08]}><sphereGeometry args={[0.07, 8, 6]} /><meshStandardMaterial color="#22c55e" roughness={0.8} /></mesh>
+          </group>
+          <mesh rotation={[Math.PI / 2.4, 0, 0]}><torusGeometry args={[0.22, 0.012, 6, 24]} /><meshStandardMaterial {...gold} /></mesh>
+        </group>
+      )}
+      {kind === 'stickers' && (
+        <group position={[0, 1.95, 0]} ref={spin}>
+          {[0, 1, 2].map((i) => (
+            <mesh key={i} position={[Math.cos((i * Math.PI * 2) / 3) * 0.5, Math.sin(i * 1.7) * 0.06, Math.sin((i * Math.PI * 2) / 3) * 0.5]}>
+              <octahedronGeometry args={[0.08]} />
+              <meshStandardMaterial color={['#facc15', '#f472b6', '#38bdf8'][i]} emissive={['#facc15', '#f472b6', '#38bdf8'][i]} emissiveIntensity={0.7} />
+            </mesh>
+          ))}
+        </group>
+      )}
+      {kind === 'puzzle' && (
+        <group position={[-0.62, 1.2, 0.15]}>
+          <group ref={spin}>
+            <mesh><boxGeometry args={[0.2, 0.2, 0.2]} /><meshStandardMaterial color="#ef4444" /></mesh>
+            {[[0.101, 0, 0, '#22c55e'], [-0.101, 0, 0, '#3b82f6'], [0, 0.101, 0, '#facc15'], [0, -0.101, 0, '#f97316'], [0, 0, 0.101, '#ffffff'], [0, 0, -0.101, '#a855f7']].map(([x, y, z, c], i) => (
+              <mesh key={i} position={[x as number, y as number, z as number]}><boxGeometry args={[Math.abs(x as number) > 0 ? 0.01 : 0.15, Math.abs(y as number) > 0 ? 0.01 : 0.15, Math.abs(z as number) > 0 ? 0.01 : 0.15]} /><meshStandardMaterial color={c as string} /></mesh>
+            ))}
+          </group>
+        </group>
+      )}
+      {kind === 'telescope' && (
+        <group position={[0.12, 1.0, -0.3]} rotation={[0.9, 0, 0.5]}>
+          <mesh><cylinderGeometry args={[0.04, 0.05, 0.55, 10]} /><meshStandardMaterial color="#92400e" metalness={0.3} roughness={0.5} /></mesh>
+          <mesh position={[0, 0.3, 0]}><cylinderGeometry args={[0.06, 0.045, 0.12, 10]} /><meshStandardMaterial {...gold} /></mesh>
+          <mesh position={[0, -0.3, 0]}><cylinderGeometry args={[0.03, 0.04, 0.1, 10]} /><meshStandardMaterial color="#1f2937" /></mesh>
+        </group>
+      )}
+      {kind === 'notebook' && (
+        <group position={[-0.55, 1.05, 0.25]} rotation={[0.3, 0.5, 0]}>
+          <mesh><boxGeometry args={[0.2, 0.26, 0.04]} /><meshStandardMaterial color="#1e3a8a" /></mesh>
+          <mesh position={[0.0, 0, 0.022]}><boxGeometry args={[0.17, 0.22, 0.005]} /><meshStandardMaterial color="#f8fafc" /></mesh>
+          <mesh position={[-0.095, 0, 0]}><boxGeometry args={[0.015, 0.26, 0.05]} /><meshStandardMaterial color="#facc15" /></mesh>
+        </group>
+      )}
+    </group>
+  )
+}
+
 /** LEGO-style minifigure with swinging arms and legs */
-export function Minifig({ shirt, pants, hair, anim, longHair, shirt2, shirtId, pantsId, pattern, shoes, hat, glasses, back, bandana }: MinifigProps) {
+export function Minifig({ shirt, pants, hair, anim, longHair, shirt2, shirtId, pantsId, pattern, shoes, hat, glasses, back, show, bandana }: MinifigProps) {
   const shirtItem = shirtId ? ITEM_BY_ID[shirtId] : undefined
   const pantsItem = pantsId ? ITEM_BY_ID[pantsId] : undefined
   const shirtKind = shirtItem?.fabric ?? 'cotton'
@@ -284,6 +367,7 @@ export function Minifig({ shirt, pants, hair, anim, longHair, shirt2, shirtId, p
 
   return (
     <group ref={root}>
+      {show && <ShowOff kind={show} />}
       {/* legs: denim trousers with cuffs and sneakers */}
       {[
         [legL, -0.115],

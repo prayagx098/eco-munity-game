@@ -88,7 +88,7 @@ function RemotePlayer({ id, profile }: { id: string; profile: Profile }) {
   return (
     <group ref={group}>
       <group ref={body}>
-        <Minifig shirt={profile.shirt} pants={profile.pants} hair={profile.hair} anim={anim} shirt2={profile.shirt2} shirtId={profile.shirtId} pantsId={profile.pantsId} pattern={profile.pattern} shoes={profile.shoes} hat={profile.hat} glasses={profile.glasses} back={profile.back} bandana={bandana} />
+        <Minifig shirt={profile.shirt} pants={profile.pants} hair={profile.hair} anim={anim} shirt2={profile.shirt2} shirtId={profile.shirtId} pantsId={profile.pantsId} pattern={profile.pattern} shoes={profile.shoes} hat={profile.hat} glasses={profile.glasses} back={profile.back} show={profile.show} bandana={bandana} />
       </group>
       {vehicle && (
         <group ref={vehRef}>

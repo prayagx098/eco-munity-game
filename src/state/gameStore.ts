@@ -25,7 +25,7 @@ import { sfx, type SfxName } from '../audio/audio'
 import { ITEM_BY_ID, ROUND_BONUS, TASK_COINS, capacityOf, loadWallet, saveWallet, type Cat, type Wallet } from './shop'
 import { PROJECT_BY_ID, type Program } from './projects'
 import { PROJECT_COINS, QUIZ_CAP, QUIZ_COIN, dailyOf, initEarning } from './earn'
-import { GOOD_BY_ID, pickMaterials, usedSlots } from './goods'
+import { GOOD_BY_ID, READ_FACTS, pickMaterials, usedSlots } from './goods'
 
 /* ------------------------------------------------------------------ */
 /* Types                                                                */
@@ -105,6 +105,8 @@ export interface Profile {
   hat?: string
   glasses?: string
   back?: string
+  /** the show-off item floating beside the character */
+  show?: string
   /** projects standing in the Maker Yard (so other players can see them) */
   yard?: { pad: number; def: string; prog: Program }[]
   shirt: string
@@ -490,6 +492,14 @@ export interface GameState {
   setInv: (o?: boolean) => void
   buyGood: (id: string) => 'ok' | 'poor' | 'full'
   dumpGood: (id: string) => void
+  /** things to DO with counter-3 goods */
+  readBook: (id: string) => void
+  plantSeeds: () => void
+  toggleShow: (id: string) => void
+  giftGood: (id: string) => void
+  receiveGift: (id: string, fromName: string) => void
+  compassOn: boolean
+  toggleCompass: () => void
   buildProject: (def: string, prog: Program) => boolean
   placeProject: (id: string) => 'ok' | 'far' | 'full'
   takeProject: (id: string) => void
@@ -568,6 +578,10 @@ export type RemoteEvent =
   | { kind: 'sfx'; name: SfxName; caption?: string }
 
 /** a visual/sound effect other players near you should also see (petting, bells, feeding…). Not part of the world state. */
+/** reading cool-downs and which fact comes next (per book) */
+const lastRead: Record<string, number> = {}
+const readCount: Record<string, number> = {}
+
 const sendFx = (m: { k: string; x: number; z: number; [key: string]: unknown }) => bridge.send({ t: 'fx', ...m })
 
 const sendEvent = (e: RemoteEvent, to: string = 'all') => {
@@ -1106,6 +1120,109 @@ export const useGame = create<GameState>()((set, get) => {
       set({ quizBowl: null })
     },
     setBin: (o) => set((st) => ({ binOpen: o ?? !st.binOpen })),
+    compassOn: false,
+    toggleCompass: () => {
+      const on = !get().compassOn
+      set({ compassOn: on })
+      sfx('discover')
+      get().pushToast({ kind: 'info', emoji: '🧭', title: on ? 'Compass on' : 'Compass off', text: on ? 'The arrow at the top points to the nearest thing that needs your help.' : undefined })
+    },
+
+    readBook: (id) => {
+      const g = GOOD_BY_ID[id]
+      const facts = READ_FACTS[id]
+      if (!g || !facts || (get().wallet.inv[id] ?? 0) <= 0) return
+      const now = Date.now()
+      if (now - (lastRead[id] ?? 0) < 20000) {
+        get().pushToast({ kind: 'info', emoji: '😴', title: 'Let your brain rest a moment', text: 'Come back in a few seconds for another page.' })
+        return
+      }
+      lastRead[id] = now
+      readCount[id] = ((readCount[id] ?? -1) + 1) % facts.length
+      sfx('discover')
+      get().pushToast({ kind: 'good', emoji: g.icon, title: `${g.name}: did you know?`, text: facts[readCount[id]] })
+      get().applyResult({ stat: { learned: 1 } })
+      get().reward({ happiness: 2, points: 2 })
+    },
+
+    plantSeeds: () => {
+      const s = get()
+      if ((s.wallet.inv['seeds'] ?? 0) <= 0) return
+      let best: SaplingSpot | null = null
+      let bd = 6
+      for (const sp of s.saplings) {
+        if (sp.planted) continue
+        const d = Math.hypot(sp.x - player.x, sp.z - player.z)
+        if (d < bd) {
+          bd = d
+          best = sp
+        }
+      }
+      if (!best) {
+        s.pushToast({ kind: 'info', emoji: '🌱', title: 'Find an empty plot first', text: 'Walk to a free planting plot in the Pine Forest (north-east) and use the seeds there.' })
+        return
+      }
+      const inv = { ...s.wallet.inv }
+      if ((inv['seeds'] ?? 0) <= 1) delete inv['seeds']
+      else inv['seeds']--
+      const wallet = { ...s.wallet, inv }
+      saveWallet(wallet)
+      set({ wallet })
+      get().dispatch({ kind: 'plant', id: best.id })
+    },
+
+    toggleShow: (id) => {
+      const w = get().wallet
+      const wallet = { ...w, show: w.show === id ? undefined : id }
+      saveWallet(wallet)
+      set({ wallet })
+      get().applyOutfit()
+      dress.active = true
+      dress.t = 0
+      sfx('fanfare')
+    },
+
+    giftGood: (id) => {
+      const s = get()
+      const to = s.nearbyMate
+      const g = GOOD_BY_ID[id]
+      const n = s.wallet.inv[id] ?? 0
+      if (!g || n <= 0) return
+      if (!to || !s.remotes[to]) {
+        s.pushToast({ kind: 'info', emoji: '🎁', title: 'Nobody close enough', text: 'Walk up next to another player to give them a gift.' })
+        return
+      }
+      const inv = { ...s.wallet.inv }
+      if (n === 1) delete inv[id]
+      else inv[id] = n - 1
+      const wallet = { ...s.wallet, inv, show: s.wallet.show === id && n === 1 ? undefined : s.wallet.show }
+      saveWallet(wallet)
+      set({ wallet })
+      get().applyOutfit()
+      bridge.send({ t: 'gift', to, id, name: s.profile.name })
+      sfx('fanfare')
+      get().pushToast({ kind: 'good', emoji: '🎁', title: `You gave ${g.name} to ${s.remotes[to].name}!`, text: 'Kindness makes the whole town happier.' })
+      get().applyResult({ stat: { kindWords: 1 } })
+      get().reward({ happiness: 5, points: 3, x: player.x, z: player.z, label: '💝 +3' })
+    },
+
+    receiveGift: (id, fromName) => {
+      const g = GOOD_BY_ID[id]
+      if (!g || g.counter !== 3) return
+      const w = get().wallet
+      sfx('fanfare')
+      if (usedSlots(w.inv) + g.size <= capacityOf(w.owned)) {
+        const wallet = { ...w, inv: { ...w.inv, [id]: (w.inv[id] ?? 0) + 1 } }
+        saveWallet(wallet)
+        set({ wallet })
+        get().pushToast({ kind: 'good', emoji: '🎁', title: `${fromName} gave you ${g.name}!`, text: 'It is in your backpack.' })
+      } else {
+        // backpack full: the gift turns into coins instead of getting lost
+        get().addCoins(Math.ceil(g.price / 2), `${fromName} gave you ${g.name}, but your backpack is full`)
+      }
+      get().reward({ happiness: 5, points: 3 })
+    },
+
     dumpGood: (id) => {
       const w = get().wallet
       const n = w.inv[id] ?? 0
@@ -1113,9 +1230,10 @@ export const useGame = create<GameState>()((set, get) => {
       const inv = { ...w.inv }
       if (n === 1) delete inv[id]
       else inv[id] = n - 1
-      const wallet = { ...w, inv }
+      const wallet = { ...w, inv, show: w.show === id && n === 1 ? undefined : w.show }
       saveWallet(wallet)
       set({ wallet })
+      get().applyOutfit()
       sfx('drop')
       get().pushToast({ kind: 'info', emoji: '♻️', title: `${GOOD_BY_ID[id]?.name ?? 'Part'} recycled`, text: 'Electronics go in the e-waste bin so the metals can be reused, never in the normal bin.' })
     },
@@ -1251,6 +1369,7 @@ export const useGame = create<GameState>()((set, get) => {
           shirt2: shirt?.color2,
           shirtId: shirt?.id,
           pantsId: eq('pants')?.id,
+          show: wallet.show,
           pattern: shirt?.style,
           pants: eq('pants')?.color ?? base.pants,
           hair: eq('hair')?.color ?? base.hair,

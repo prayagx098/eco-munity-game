@@ -1,3 +1,4 @@
+import { CompassArrow } from './CompassArrow'
 import { VoiceBar } from './VoiceBar'
 import { lazy, Suspense, useState } from 'react'
 import { useGame } from '../../state/gameStore'
@@ -45,6 +46,7 @@ export function HUD() {
       <div className="pointer-events-none absolute top-2 sm:top-3 left-1/2 flex -translate-x-1/2 flex-col items-center gap-1.5 sm:gap-2 z-10">
         <StatusPill />
         <ZoneBanner />
+        <CompassArrow />
       </div>
 
       {/* Right side feed (like a kill feed): messages stack at the edge and keep the centre clear */}

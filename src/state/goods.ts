@@ -61,3 +61,41 @@ export function pickMaterials(needs: { ids: string[]; qty?: number }[], inv: Rec
   }
   return out
 }
+
+/* ------------------------------------------------------------------ */
+/* What you can DO with the things from counter 3                      */
+/* ------------------------------------------------------------------ */
+
+/** a fresh, kid-friendly fact each time you read */
+export const READ_FACTS: Record<string, string[]> = {
+  'book-code': [
+    'A loop repeats an instruction, so you write it once instead of ten times.',
+    'An "if" lets a program choose: IF it is dark THEN switch the light on.',
+    'A bug is a mistake in code. Finding and fixing bugs is called debugging!',
+    'A function is a little recipe you can use again and again.',
+  ],
+  'book-eco': [
+    'Wangari Maathai started a movement that planted over 50 million trees.',
+    'A single recycled glass bottle saves enough energy to run a light bulb for 4 hours.',
+    'Greta Thunberg began by sitting outside her school with a sign, all by herself.',
+    'Bees help grow about one third of the food we eat. Plant flowers for them!',
+  ],
+  'book-space': [
+    'One day on Venus is longer than one year on Venus.',
+    'Light from the Sun takes about 8 minutes to reach Earth.',
+    'Jupiter is so big that all the other planets would fit inside it.',
+    'There are more stars in the universe than grains of sand on all of Earth\'s beaches.',
+  ],
+  notebook: [
+    'Great inventors sketch first: draw three versions of your idea, then pick the best.',
+    'Write down one thing you learned today. Tomorrow you will be glad you did.',
+    'A good design solves one problem really well. What problem will you solve?',
+  ],
+}
+
+/** things you can read */
+export const READABLE = new Set(Object.keys(READ_FACTS))
+/** things that can be worn / floated beside your character for everyone to see */
+export const SHOW_OFF = new Set(['trophy', 'robot', 'globe', 'stickers', 'puzzle', 'telescope', 'notebook'])
+/** counter-3 things you can give to a nearby player */
+export const GIFTABLE = (id: string) => GOOD_BY_ID[id]?.counter === 3

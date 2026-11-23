@@ -124,6 +124,8 @@ export interface Wallet {
   built: string[]
   /** today's earnings, so every source has a daily limit */
   daily: Daily
+  /** the show-off item floating beside your character (trophy, robot…) */
+  show?: string
 }
 
 export interface Daily {
@@ -153,7 +155,7 @@ export function loadWallet(): Wallet {
     const raw = localStorage.getItem(KEY)
     if (raw) {
       const w = JSON.parse(raw) as Wallet
-      return { coins: w.coins ?? 0, owned: w.owned ?? [], equipped: w.equipped ?? {}, base: w.base ?? null, paid: w.paid ?? [], inv: w.inv ?? {}, projects: (w.projects ?? []).map((p) => ({ ...p, pad: null })), built: w.built ?? [], daily: w.daily && w.daily.day === todayKey() ? w.daily : freshDaily() }  // projects always start the game on the shelf
+      return { coins: w.coins ?? 0, owned: w.owned ?? [], equipped: w.equipped ?? {}, base: w.base ?? null, paid: w.paid ?? [], inv: w.inv ?? {}, projects: (w.projects ?? []).map((p) => ({ ...p, pad: null })), built: w.built ?? [], show: typeof w.show === 'string' ? w.show : undefined, daily: w.daily && w.daily.day === todayKey() ? w.daily : freshDaily() }  // projects always start the game on the shelf
     }
   } catch {
     /* storage unavailable */

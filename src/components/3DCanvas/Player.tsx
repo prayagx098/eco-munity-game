@@ -400,7 +400,7 @@ export function Player() {
   return (
     <group ref={group}>
       <group>
-        <Minifig shirt={profile.shirt} pants={profile.pants} hair={profile.hair} anim={anim} shirt2={profile.shirt2} shirtId={profile.shirtId} pantsId={profile.pantsId} pattern={profile.pattern} shoes={profile.shoes} hat={profile.hat} glasses={profile.glasses} back={profile.back} bandana={bandana} />
+        <Minifig shirt={profile.shirt} pants={profile.pants} hair={profile.hair} anim={anim} shirt2={profile.shirt2} shirtId={profile.shirtId} pantsId={profile.pantsId} pattern={profile.pattern} shoes={profile.shoes} hat={profile.hat} glasses={profile.glasses} back={profile.back} show={profile.show} bandana={bandana} />
       </group>
       <group ref={veh} visible={false}>
         {player.vehicle && <VehicleMesh kind={player.vehicle} spin />}

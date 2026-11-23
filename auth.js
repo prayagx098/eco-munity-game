@@ -97,6 +97,7 @@ export function sanitizeData(d) {
       projects: Array.isArray(w.projects) ? w.projects.slice(0, 60) : [],
       built: Array.isArray(w.built) ? w.built.filter((x) => typeof x === 'string').slice(0, 200) : [],
       daily: w.daily && typeof w.daily === 'object' ? w.daily : null,
+      show: typeof w.show === 'string' && /^[a-z-]{1,20}$/.test(w.show) ? w.show : undefined,
     }
   }
   const meta = sanitizeMeta(d.meta)

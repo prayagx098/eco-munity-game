@@ -387,6 +387,10 @@ function handle(m: Record<string, unknown>) {
       bridge.worldDirty()
       return
     }
+    case 'gift':
+      // a present from another player, only for me
+      if (m.to === bridge.myId) s.receiveGift(String(m.id), String(m.name ?? 'Someone'))
+      return
     case 'rtc':
       // voice connection set-up, only for me
       if (m.to === bridge.myId) void onVoiceSignal(from, String(m.k), m.d)
