@@ -13,7 +13,7 @@
 import { airborne, type VehicleKind } from '../state/world'
 import { bridge, type Msg } from '../state/netBridge'
 import { useGame, type Action, type Profile, type RemoteEvent, type WorldSnapshot } from '../state/gameStore'
-import { act, ballNet, companionPos, duckFeeds, emitBurst, hostNpcs, lastBellRing, player, remotePlayers } from '../state/sceneRegistry'
+import { act, ballNet, carNet, carState, companionPos, duckFeeds, emitBurst, hostNpcs, lastBellRing, player, remotePlayers } from '../state/sceneRegistry'
 import { sfx } from '../audio/audio'
 import { onVoiceSignal, useVoice, voicePeerLeft } from './voice'
 
@@ -412,6 +412,13 @@ function handle(m: Record<string, unknown>) {
       }
       return
     }
+    case 'cars':
+      // the host's traffic: every other player's cars follow it
+      if (from === bridge.hostId && !bridge.isHost && Array.isArray(m.c)) {
+        const at = performance.now()
+        for (const [id, p, v] of m.c as [string, number, number][]) carNet.set(id, { p, v, at })
+      }
+      return
     case 'ball':
       // the host's football position: everyone else glides the ball towards it
       if (from === bridge.hostId && !bridge.isHost) Object.assign(ballNet, { x: m.x, z: m.z, y: m.y, vx: m.vx, vz: m.vz, vy: m.vy, at: performance.now() })
@@ -478,6 +485,12 @@ export function startNet() {
   }, 1000)
 
   setInterval(sendWorld, 500)
+
+  // the host reports where every car is, 8 times a second
+  setInterval(() => {
+    if (!bridge.isHost || !playing() || (peers.size === 0 && !wsConnected) || carState.size === 0) return
+    post({ t: 'cars', c: [...carState].map(([id, s]) => [id, Math.round(s.p * 100) / 100, Math.round(s.v * 100) / 100]) })
+  }, 125)
 
   // my position, 10× a second
   setInterval(() => {

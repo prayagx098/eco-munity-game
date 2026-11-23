@@ -68,6 +68,10 @@ export const bodies = new Map<string, { x: number; z: number; r: number }>()
 /** Live companion position and waiting status (so interaction distance and bike logic know where pet is) */
 export const companionPos = { x: 0, z: 0, waiting: false, heading: 0, moving: false }
 
+/** Traffic: the host simulates the cars; everybody else follows what the host reports so all players see the same traffic */
+export const carNet = new Map<string, { p: number; v: number; at: number }>()
+export const carState = new Map<string, { p: number; v: number }>()
+
 /** the football as the host last reported it (other players glide the ball towards this) */
 export const ballNet = { x: 0, z: 0, y: 0.22, vx: 0, vz: 0, vy: 0, at: 0 }
 

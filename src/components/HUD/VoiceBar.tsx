@@ -46,7 +46,7 @@ export function VoiceBar() {
           </label>
           <div className="mt-1.5 border-t border-white/10 pt-1.5">
             {nearby.length === 0 ? (
-              <div className="text-[10px] font-medium text-white/60">No one in voice range yet. Walk up to a player who joined voice chat.</div>
+              <div className="text-[10px] font-medium text-white/60">No one close enough to hear. Walk up to a player who joined voice chat (you hear people within about 9 steps).</div>
             ) : (
               nearby.map((id) => (
                 <div key={id} className="flex items-center justify-between py-0.5 text-[11px] font-semibold">

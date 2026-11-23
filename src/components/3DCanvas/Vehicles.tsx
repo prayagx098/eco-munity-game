@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { Group } from 'three'
-import { bodies, npcPositions, player, remotePlayers } from '../../state/sceneRegistry'
+import { bodies, carNet, carState, npcPositions, player, remotePlayers } from '../../state/sceneRegistry'
+import { bridge } from '../../state/netBridge'
 import { STANDS, VEHICLES, LANE_OFF, ROAD_W, ROAD_X, WORLD_HALF, JUNCTIONS, groundY, lightState, type VehicleEntity, type VehicleKind } from '../../state/world'
 import { Label, Marker, Near } from './primitives'
 import { useGame, isNight } from '../../state/gameStore'
@@ -1119,13 +1120,28 @@ function Car({ c }: { c: CarSpec }) {
       }
     }
 
-    const want = blocked || paused ? 0 : c.speed
-    s.v += (want - s.v) * Math.min(1, dt * (blocked ? 4 : 1.5))
-    s.p += s.v * dt * c.lane
-    s.odo += s.v * dt
     const lim = WORLD_HALF - 3.6
-    if (s.p > lim) s.p = -lim
-    if (s.p < -lim) s.p = lim
+    const net = !bridge.isHost ? carNet.get(c.id) : undefined
+    if (net) {
+      // follow the host's car so everybody sees the same traffic
+      const age = Math.min(0.4, (performance.now() - net.at) / 1000)
+      let target = net.p + net.v * age * c.lane
+      if (target > lim) target -= lim * 2
+      if (target < -lim) target += lim * 2
+      const diff = target - s.p
+      if (Math.abs(diff) > 12) s.p = target
+      else s.p += diff * Math.min(1, dt * 9)
+      s.v += (net.v - s.v) * Math.min(1, dt * 6)
+      s.odo += s.v * dt
+    } else {
+      const want = blocked || paused ? 0 : c.speed
+      s.v += (want - s.v) * Math.min(1, dt * (blocked ? 4 : 1.5))
+      s.p += s.v * dt * c.lane
+      s.odo += s.v * dt
+      if (s.p > lim) s.p = -lim
+      if (s.p < -lim) s.p = lim
+      if (bridge.isHost) carState.set(c.id, { p: s.p, v: s.v })
+    }
     const x = alongZ ? lat : s.p
     const z = alongZ ? s.p : lat
     if (g.current) {

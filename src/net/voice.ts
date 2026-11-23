@@ -11,8 +11,10 @@ import { player, remotePlayers } from '../state/sceneRegistry'
  *  - Only players who also joined voice are connected, so nobody is listened to without opting in.
  */
 
-export const HEAR_RANGE = 16
-const DROP_RANGE = HEAR_RANGE + 5
+/** you only hear players this close (world units, roughly 9 steps); full volume within FULL_RANGE, fading to silence at HEAR_RANGE */
+export const HEAR_RANGE = 9
+const FULL_RANGE = 2
+const DROP_RANGE = HEAR_RANGE + 2
 const ICE: RTCIceServer[] = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }]
 // optional relay for strict school networks: set VITE_TURN_URL / VITE_TURN_USER / VITE_TURN_PASS at build time
 const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {}
@@ -79,7 +81,7 @@ export const useVoice = create<VoiceState>()((set, get) => ({
       void ctx.resume()
       set({ enabled: true, busy: false })
       for (const l of links.values()) attachTrack(l)
-      if (!timer) timer = setInterval(tick, 400)
+      if (!timer) timer = setInterval(tick, 150)
     } catch (e) {
       const name = (e as { name?: string }).name
       set({
@@ -128,16 +130,33 @@ function send(to: string, k: 'offer' | 'answer' | 'ice', d: unknown) {
 
 function attachTrack(l: Link) {
   if (!track) return
-  const sender = l.pc.getSenders().find((s) => s.track === null || s.track?.kind === 'audio')
-  void sender?.replaceTrack(track)
+  const tr = l.pc.getTransceivers().find((t) => t.receiver.track.kind === 'audio')
+  void (tr?.sender ?? l.pc.getSenders()[0])?.replaceTrack(track)
 }
 
-function makeLink(id: string): Link {
+/** for testing: how many audio bytes each link has sent and received */
+export async function voiceStats() {
+  const out: Record<string, { sent: number; received: number; state: string }> = {}
+  for (const [id, l] of links) {
+    let sent = 0
+    let received = 0
+    for (const r of (await l.pc.getStats()).values()) {
+      if (r.type === 'outbound-rtp' && r.kind === 'audio') sent += r.bytesSent ?? 0
+      if (r.type === 'inbound-rtp' && r.kind === 'audio') received += r.bytesReceived ?? 0
+    }
+    out[id] = { sent, received, state: l.pc.connectionState }
+  }
+  return out
+}
+
+function makeLink(id: string, caller: boolean): Link {
   const pc = new RTCPeerConnection({ iceServers: ICE })
   const audio = new Audio()
   audio.autoplay = true
   const link: Link = { pc, audio, pending: [], hasRemote: false }
-  pc.addTransceiver('audio', { direction: 'sendrecv' })
+  // the caller creates the audio line; the answerer must use the line that comes in with the offer
+  // (adding its own here would leave my microphone on a line nobody listens to)
+  if (caller) pc.addTransceiver('audio', { direction: 'sendrecv' })
   pc.onicecandidate = (e) => {
     if (e.candidate) send(id, 'ice', e.candidate.toJSON())
   }
@@ -185,7 +204,7 @@ function closeLink(id: string) {
 const iCall = (id: string) => bridge.myId < id
 
 async function call(id: string) {
-  const l = makeLink(id)
+  const l = makeLink(id, true)
   try {
     const offer = await l.pc.createOffer()
     await l.pc.setLocalDescription(offer)
@@ -202,9 +221,13 @@ export async function onVoiceSignal(from: string, k: string, d: unknown) {
   try {
     if (k === 'offer') {
       closeLink(from)
-      const l = makeLink(from)
+      const l = makeLink(from, false)
       await l.pc.setRemoteDescription(d as RTCSessionDescriptionInit)
       l.hasRemote = true
+      // send my voice back on the same audio line the offer created
+      const tr = l.pc.getTransceivers().find((t) => t.receiver.track.kind === 'audio')
+      if (tr) tr.direction = 'sendrecv'
+      attachTrack(l)
       for (const c of l.pending.splice(0)) await l.pc.addIceCandidate(c).catch(() => {})
       const answer = await l.pc.createAnswer()
       await l.pc.setLocalDescription(answer)
@@ -231,7 +254,7 @@ export function voicePeerLeft(id: string) {
   closeLink(id)
 }
 
-/** every 0.4 s: connect to nearby players who joined voice, drop the ones who walked away, set volumes */
+/** every 0.15 s: connect to nearby players who joined voice, drop the ones who walked away, set volumes */
 function tick() {
   const s = useVoice.getState()
   if (!s.enabled) return
@@ -249,8 +272,9 @@ function tick() {
       closeLink(id)
       continue
     }
-    const fall = Math.max(0, 1 - Math.pow(d / HEAR_RANGE, 1.6))
-    l.audio.volume = s.muted[id] ? 0 : Math.min(1, fall)
+    // closer = louder; each nearby player is heard at their own volume, and anyone beyond the range is silent
+    const fall = d <= FULL_RANGE ? 1 : d >= HEAR_RANGE ? 0 : Math.pow((HEAR_RANGE - d) / (HEAR_RANGE - FULL_RANGE), 1.4)
+    l.audio.volume = s.muted[id] ? 0 : Math.max(0, Math.min(1, fall))
     if (l.pc.connectionState === 'connected') {
       connected++
       near.push(id)
@@ -259,7 +283,7 @@ function tick() {
       l.analyser.getByteFrequencyData(l.buf)
       let sum = 0
       for (let i = 0; i < l.buf.length; i++) sum += l.buf[i]
-      speaking[id] = sum / l.buf.length > 14 && d < HEAR_RANGE
+      speaking[id] = sum / l.buf.length > 14 && d < HEAR_RANGE && l.audio.volume > 0.05
     }
   }
   for (const id of [...links.keys()]) if (!remotePlayers.has(id)) closeLink(id)
