@@ -7,6 +7,7 @@ import { env, remotePlayers } from '../../state/sceneRegistry'
 import { SCHOOL_FIELD, groundY, type VehicleKind } from '../../state/world'
 import { Label } from './primitives'
 import { VehicleMesh } from './Vehicles'
+import { leadTurn } from '../../utils/headTurn'
 import { RemotePet } from './Animals'
 import { useVoice } from '../../net/voice'
 import { Minifig, SpeechBubble, type MinifigAnim } from './NPCs'
@@ -23,6 +24,7 @@ function RemotePlayer({ id, profile }: { id: string; profile: Profile }) {
   const [vehicle, setVehicle] = useState<VehicleKind | null>(null)
   const [bandana, setBandana] = useState<'red' | 'blue' | null>(null)
   const odo = useRef(0)
+  const turnS = useRef({ head: 0 })
   const jumpY = useRef(0)
   const body = useRef<Group>(null)
   const vehRef = useRef<Group>(null)
@@ -44,9 +46,17 @@ function RemotePlayer({ id, profile }: { id: string; profile: Profile }) {
     p.x += (r.x - p.x) * k
     p.z += (r.z - p.z) * k
     odo.current += Math.hypot(p.x - ox, p.z - oz)
-    let dh = r.heading - p.h
-    dh = Math.atan2(Math.sin(dh), Math.cos(dh))
-    p.h += dh * k
+    if (r.vehicle) {
+      let dh = r.heading - p.h
+      dh = Math.atan2(Math.sin(dh), Math.cos(dh))
+      p.h += dh * k
+      turnS.current.head *= 0.8
+      anim.current.headYaw = undefined
+    } else {
+      // same head-first turn as your own character
+      p.h = leadTurn(turnS.current, p.h, r.heading, dt, 12)
+      anim.current.headYaw = turnS.current.head
+    }
     // jump height arrives 10×/s, so ease towards it quickly (and drop faster than it rises)
     const prevJ = jumpY.current
     jumpY.current += ((r.jump ?? 0) - jumpY.current) * (1 - Math.exp(-dt * 22))

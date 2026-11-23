@@ -10,6 +10,7 @@ import { footstepsOn, sfx } from '../../audio/audio'
 import { emitPuff } from './Weather'
 import { useStory } from '../../state/story'
 import { useMeta } from '../../state/meta'
+import { leadTurn } from '../../utils/headTurn'
 import { SCHOOL_FIELD, VEHICLES, airborne, collides, groundY, zoneAt } from '../../state/world'
 import { Minifig, SpeechBubble, type MinifigAnim } from './NPCs'
 import { TrashShape } from './TrashItems'
@@ -67,6 +68,8 @@ export function Player() {
   const prevSpeed = useRef(0)
   const driftT = useRef(0)
   const steerS = useRef(0)
+  // head-first turning: where the body wants to face, and how far the head has already turned
+  const turn = useRef({ head: 0, desired: player.heading })
   const accelS = useRef(0)
 
   useFrame((_state, rawDt) => {
@@ -187,7 +190,7 @@ export function Player() {
           const target = Math.atan2(dx, dz)
           let diff = target - player.heading
           diff = Math.atan2(Math.sin(diff), Math.cos(diff))
-          player.heading += diff * Math.min(1, dt * 14)
+          turn.current.desired = target
         }
       }
     }
@@ -199,8 +202,16 @@ export function Player() {
     }
     if (view.mode !== 'iso' && !busy && !s.chatWith && !player.vehicle) {
       // the hero smoothly turns to face where the camera looks
-      const diff = Math.atan2(Math.sin(view.yaw - player.heading), Math.cos(view.yaw - player.heading))
-      player.heading += diff * Math.min(1, dt * 12)
+      turn.current.desired = view.yaw
+    }
+    // the head swings round first, then the body follows (not while riding or mid-gesture)
+    if (!player.vehicle && !busy && !s.chatWith) {
+      player.heading = leadTurn(turn.current, player.heading, turn.current.desired, dt, view.mode === 'iso' ? 14 : 12)
+      anim.current.headYaw = turn.current.head
+    } else {
+      turn.current.desired = player.heading
+      turn.current.head *= 0.8
+      anim.current.headYaw = undefined
     }
 
     // --- interaction sequence: face the target, gesture, apply the result mid-gesture ---

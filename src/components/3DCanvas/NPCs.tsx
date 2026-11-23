@@ -51,6 +51,8 @@ export interface MinifigAnim {
   rideKind?: 'bike' | 'scooter' | 'board'
   /** head turn toward something (radians, relative to the body) */
   look?: number
+  /** head turned this far relative to the body (set while the body is turning to catch up) */
+  headYaw?: number
   /** a one-off gesture: kind + progress 0..1 */
   act?: { kind: string; p: number } | null
   /** airborne jump / hop 0..1 */
@@ -223,8 +225,11 @@ export function Minifig({ shirt, pants, hair, anim, longHair, shirt2, shirtId, p
       }
     }
     if (head.current) {
-      const want = a.look ?? Math.sin(phase * 0.5) * (a.speed < 0.2 ? 0.25 : 0)
-      head.current.rotation.y += (want - head.current.rotation.y) * Math.min(1, dt * 6)
+      if (a.headYaw !== undefined && Math.abs(a.headYaw) > 0.02) head.current.rotation.y = a.headYaw
+      else {
+        const want = a.look ?? Math.sin(phase * 0.5) * (a.speed < 0.2 ? 0.25 : 0)
+        head.current.rotation.y += (want - head.current.rotation.y) * Math.min(1, dt * 6)
+      }
     }
     // base pose (walking / carrying / waving / jumping)
     const rideArm = a.rideKind === 'scooter' ? -1.25 : a.rideKind === 'board' ? -0.25 : -0.95
